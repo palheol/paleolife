@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PALEO-LIFE — Maquette Fouille + Labo</title>
+<style>
+  :root {
+    --wood: #6b4a34;
+    --wood-dark: #4a3123;
+    --cream: #f3e6d0;
+    --ink: #2c2117;
+    --accent: #c97b3d;
+    --green: #6a9955;
+    --orange: #d99a3d;
+    --red: #c1543f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Verdana, sans-serif;
+    background: linear-gradient(180deg, #f7ead2, #e7d3ad);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px 60px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.4em; }
+  .subtitle { margin: 0 0 20px; color: #6b5a44; font-size: 0.9em; }
+  .screen { display: none; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 760px; }
+  .screen.active { display: flex; }
+  .panel {
+    background: var(--cream);
+    border: 2px solid var(--wood);
+    border-radius: 10px;
+    padding: 16px;
+    width: 100%;
+  }
+  /* --- Écran fouille --- */
+  #dig-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    width: 100%;
+    aspect-ratio: 8 / 5;
+  }
+  .dig-cell {
+    background: var(--wood);
+    border: 1px solid var(--wood-dark);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: opacity 0.25s, transform 0.15s;
+  }
+  .dig-cell:hover { filter: brightness(1.1); }
+  .dig-cell.cleared { opacity: 0; pointer-events: none; transform: scale(0.6); }
+  #dig-hint {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 8 / 5;
+    margin-top: -100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  /* --- Écran labo --- */
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .tool-btn {
+    background: #fff8ec;
+    border: 2px solid var(--wood);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--wood-dark); }
+  canvas#labo-canvas {
+    width: 100%;
+    max-width: 720px;
+    background: #2c2117;
+    border: 2px solid var(--wood-dark);
+    border-radius: 8px;
+    cursor: crosshair;
+  }
+  .stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.9em; }
+  .stat { background: #fff8ec; border: 1px solid var(--wood); border-radius: 6px; padding: 6px 12px; }
+  .gauge-wrap { width: 100%; }
+  .gauge-bar { height: 14px; background: #e6d6ba; border: 1px solid var(--wood); border-radius: 8px; overflow: hidden; }
+  .gauge-fill { height: 100%; width: 0%; background: var(--green); transition: width 0.1s linear, background 0.2s; }
+  .gauge-label { font-size: 0.8em; margin-bottom: 3px; color: #6b5a44; }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  button.primary:disabled { background: #c9b89a; cursor: not-allowed; }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff8ec;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 0.95; }
+  .note { font-size: 0.8em; color: #6b5a44; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="error-banner" style="display:none; position:fixed; top:0; left:0; right:0; background:#c1543f; color:#fff; padding:10px 16px; font-size:0.85em; z-index:999;"></div>
+<script>
+// Filet de sécurité : affiche l'erreur JS directement sur la page (pratique sans les outils développeur)
+window.addEventListener('error', function (e) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = 'Erreur JS : ' + e.message + ' (ligne ' + e.lineno + ')';
+  banner.style.display = 'block';
+});
+</script>
+
+<h1>PALEO-LIFE — Maquette : Fouille + Labo</h1>
+<p class="subtitle">Données factices — à valider en jouant, avant codage Godot (voir CLAUDE.md)</p>
+
+<!-- ===================== ÉCRAN FOUILLE ===================== -->
+<div id="screen-fouille" class="screen active">
+  <div class="panel">
+    <p>Creuse la zone pour dégager un bloc de gangue. Pas de chrono, pas d'échec : clique où tu veux.</p>
+    <div id="dig-grid"></div>
+  </div>
+  <div class="stats"><div class="stat" id="dig-progress">Zone dégagée : 0%</div></div>
+  <button class="primary" id="btn-go-labo" disabled>Emporter le bloc au labo →</button>
+</div>
+
+<!-- ===================== ÉCRAN LABO ===================== -->
+<div id="screen-labo" class="screen">
+  <div class="panel" style="display:flex; flex-direction:column; gap:12px; align-items:center;">
+    <div class="toolbar">
+      <button class="tool-btn active" data-tool="percuteur">🔨 Micro-percuteur</button>
+      <button class="tool-btn" data-tool="pinceau">🖌️ Pinceau</button>
+      <button class="tool-btn" data-tool="colle">💧 Colle</button>
+    </div>
+    <canvas id="labo-canvas" width="720" height="480"></canvas>
+    <div class="gauge-wrap">
+      <div class="gauge-label">Risque de fissure (gestes amples et rapides = danger)</div>
+      <div class="gauge-bar"><div class="gauge-fill" id="gauge-fill"></div></div>
+    </div>
+    <div class="stats">
+      <div class="stat" id="stat-progress">Dégagement : 0%</div>
+      <div class="stat" id="stat-value">Valeur scientifique : 100%</div>
+      <div class="stat" id="stat-cracks">Fissures : 0</div>
+    </div>
+    <button class="primary" id="btn-go-etude" disabled>Envoyer à l'étude →</button>
+    <p class="note">Percuteur = dégrossit la gangue (risque de fissure si geste trop ample/rapide). Pinceau = finition, sans risque. Colle = recolle une fissure proche du clic (la valeur scientifique perdue ne revient pas).</p>
+  </div>
+</div>
+
+<!-- ===================== ÉCRAN RÉSULTAT ===================== -->
+<div id="screen-resultat" class="screen">
+  <div class="panel" style="text-align:center;">
+    <h2>Fossile prêt pour l'étude !</h2>
+    <p id="resultat-summary"></p>
+    <p class="note">(Le quiz d'étude et le cartel seront une prochaine maquette.)</p>
+  </div>
+  <button class="primary" id="btn-restart">↺ Recommencer la maquette</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// PALEO-LIFE — maquette fouille + labo
+// Code minimal, données factices, formes simples (règle "maquette d'abord")
+// ============================================================
+
+// ---------- Navigation entre écrans ----------
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ---------- Écran Fouille : grille simple à dégager ----------
+const digGrid = document.getElementById('dig-grid');
+const TOTAL_DIG_CELLS = 40;
+let clearedCells = 0;
+
+for (let i = 0; i < TOTAL_DIG_CELLS; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'dig-cell';
+  cell.addEventListener('click', () => {
+    if (cell.classList.contains('cleared')) return;
+    cell.classList.add('cleared');
+    clearedCells++;
+    updateDigProgress();
+  });
+  digGrid.appendChild(cell);
+}
+
+function updateDigProgress() {
+  const pct = Math.round((clearedCells / TOTAL_DIG_CELLS) * 100);
+  document.getElementById('dig-progress').textContent = `Zone dégagée : ${pct}%`;
+  document.getElementById('btn-go-labo').disabled = pct < 60;
+}
+
+document.getElementById('btn-go-labo').addEventListener('click', () => {
+  showScreen('screen-labo');
+});
+
+// ---------- Écran Labo : dégagement de la gangue ----------
+const canvas = document.getElementById('labo-canvas');
+const ctx = canvas.getContext('2d');
+const COLS = 24, ROWS = 16;
+const CELL_W = canvas.width / COLS, CELL_H = canvas.height / ROWS;
+
+// thickness : 2 = gangue épaisse, 1 = gangue fine, 0 = dégagé
+const cellState = new Array(COLS * ROWS).fill(2);
+
+// --- Zone utile : seule la gangue autour du spécimen doit être dégagée ---
+// (le bloc ramené de la fouille suit grossièrement la forme du fossile, pas tout le rectangle)
+function inEllipse(x, y, cx, cy, rx, ry) {
+  return ((x - cx) ** 2) / (rx ** 2) + ((y - cy) ** 2) / (ry ** 2) <= 1;
+}
+function isInsideFossilZone(x, y) {
+  const pad = 16;
+  if (inEllipse(x, y, 360, 240, 210 + pad, 85 + pad)) return true; // corps
+  if (inEllipse(x, y, 150, 240, 38 + pad, 30 + pad)) return true;  // crâne
+  if (x > 555 && x < 625 && y > 190 && y < 290) return true;       // nageoire caudale
+  return false;
+}
+
+const relevantCells = [];
+for (let row = 0; row < ROWS; row++) {
+  for (let col = 0; col < COLS; col++) {
+    const idx = row * COLS + col;
+    const cx = col * CELL_W + CELL_W / 2;
+    const cy = row * CELL_H + CELL_H / 2;
+    if (isInsideFossilZone(cx, cy)) {
+      relevantCells.push(idx);
+    } else {
+      cellState[idx] = 0; // en dehors du spécimen : rien à dégager
+    }
+  }
+}
+
+let currentTool = 'percuteur';
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+    playToolSwitchSound();
+  });
+});
+
+// --- Silhouette de fossile (forme simple : poisson stylisé) ---
+function drawFossilShape() {
+  ctx.save();
+  ctx.strokeStyle = '#e8d9b8';
+  ctx.fillStyle = '#d8c49a';
+  ctx.lineWidth = 3;
+
+  // corps ovale
+  ctx.beginPath();
+  ctx.ellipse(360, 240, 210, 85, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // colonne vertébrale
+  ctx.beginPath();
+  ctx.moveTo(160, 240);
+  ctx.lineTo(560, 240);
+  ctx.stroke();
+
+  // côtes
+  for (let x = 190; x < 540; x += 24) {
+    const rib = 70 * (1 - Math.abs(x - 360) / 210);
+    ctx.beginPath();
+    ctx.moveTo(x, 240 - rib);
+    ctx.lineTo(x, 240 + rib);
+    ctx.stroke();
+  }
+
+  // crâne
+  ctx.beginPath();
+  ctx.ellipse(150, 240, 38, 30, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#2c2117';
+  ctx.beginPath();
+  ctx.arc(140, 232, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // nageoire caudale
+  ctx.fillStyle = '#d8c49a';
+  ctx.beginPath();
+  ctx.moveTo(565, 240);
+  ctx.lineTo(620, 195);
+  ctx.lineTo(620, 285);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// --- Gangue par cellule ---
+function drawGangue() {
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) {
+      const t = cellState[row * COLS + col];
+      if (t === 0) continue;
+      ctx.fillStyle = t === 2 ? 'rgba(74,49,35,0.98)' : 'rgba(74,49,35,0.45)';
+      ctx.fillRect(col * CELL_W, row * CELL_H, CELL_W + 0.5, CELL_H + 0.5);
+    }
+  }
+}
+
+// --- Fissures : ligne de fracture irrégulière plutôt qu'une croix, plus lisible en jeu ---
+let cracks = []; // liste de {x, y, path}
+
+function makeCrackPath(cx, cy) {
+  const segments = [];
+  let angle = Math.random() * Math.PI * 2;
+  let x = cx, y = cy;
+  const segLen = 4 + Math.random() * 3;
+  const count = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < count; i++) {
+    angle += (Math.random() - 0.5) * 1.3;
+    const nx = x + Math.cos(angle) * segLen;
+    const ny = y + Math.sin(angle) * segLen;
+    segments.push({ x1: x, y1: y, x2: nx, y2: ny });
+    x = nx; y = ny;
+    if (Math.random() < 0.35) {
+      const branchAngle = angle + (Math.random() - 0.5) * 2.2;
+      const bx = x + Math.cos(branchAngle) * (segLen * 0.7);
+      const by = y + Math.sin(branchAngle) * (segLen * 0.7);
+      segments.push({ x1: x, y1: y, x2: bx, y2: by });
+    }
+  }
+  return segments;
+}
+
+function drawCrackSegments(path, offsetX, offsetY) {
+  path.forEach(s => {
+    ctx.beginPath();
+    ctx.moveTo(s.x1 + offsetX, s.y1 + offsetY);
+    ctx.lineTo(s.x2 + offsetX, s.y2 + offsetY);
+    ctx.stroke();
+  });
+}
+
+function drawCracks() {
+  ctx.save();
+  cracks.forEach(c => {
+    // légère ombre pour donner du relief à la fissure
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2.4;
+    drawCrackSegments(c.path, 0.6, 0.6);
+    // trait principal, couleur rouille sombre façon fracture dans l'os
+    ctx.strokeStyle = '#3a1410';
+    ctx.lineWidth = 1.4;
+    drawCrackSegments(c.path, 0, 0);
+  });
+  ctx.restore();
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawFossilShape();
+  drawGangue();
+  drawCracks();
+}
+
+// --- État de jeu ---
+let riskGauge = 0;       // 0 à 100
+let scienceValue = 100;  // valeur scientifique du spécimen
+let crackCount = 0;
+let isDragging = false;
+let lastPos = null;
+let lastTime = 0;
+
+function cellAt(x, y) {
+  const col = Math.floor(x / CELL_W);
+  const row = Math.floor(y / CELL_H);
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return null;
+  return { col, row, index: row * COLS + col };
+}
+
+function applyTool(x, y, dist, dt) {
+  const cell = cellAt(x, y);
+  if (!cell) return;
+
+  if (currentTool === 'percuteur') {
+    // Dégrossit : gangue épaisse -> gangue fine (une seule étape, la finition revient au pinceau)
+    if (cellState[cell.index] === 2) cellState[cell.index] = 1;
+
+    // Risque = combinaison de l'amplitude du geste et de sa vitesse.
+    // Un geste lent et court reste sûr ; un grand trait rapide fait grimper la jauge très vite.
+    const speed = dist / Math.max(dt, 1); // px/ms
+    const riskAdd = Math.min(40, dist * 0.35 + speed * 9);
+    riskGauge = Math.min(100, riskGauge + riskAdd);
+
+    if (riskGauge >= 100) {
+      cracks.push({ x, y, path: makeCrackPath(x, y) });
+      crackCount++;
+      scienceValue = Math.max(40, scienceValue - 8);
+      riskGauge = 0;
+      playCrackSound();
+      showToast('Crac ! Une fissure est apparue.');
+    }
+  } else if (currentTool === 'pinceau') {
+    // Finition fine, jamais de risque
+    if (cellState[cell.index] === 1) cellState[cell.index] = 0;
+  }
+
+  updateStats();
+  render();
+}
+
+function tryGlueAt(x, y) {
+  const idx = cracks.findIndex(c => Math.hypot(c.x - x, c.y - y) < 26);
+  if (idx >= 0) {
+    cracks.splice(idx, 1);
+    showToast('Fissure recollée (la valeur scientifique reste légèrement réduite).');
+    render();
+  } else {
+    showToast("Rien à recoller ici.");
+  }
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  if (currentTool === 'colle') {
+    tryGlueAt(x, y);
+    return;
+  }
+  isDragging = true;
+  lastPos = { x, y };
+  lastTime = performance.now();
+  applyTool(x, y, 0, 16);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top) * scaleY;
+
+  const now = performance.now();
+  const dist = Math.hypot(x - lastPos.x, y - lastPos.y);
+  const dt = now - lastTime;
+  applyTool(x, y, dist, dt);
+  lastPos = { x, y };
+  lastTime = now;
+});
+
+window.addEventListener('mouseup', () => { isDragging = false; });
+
+// La jauge redescend doucement avec le temps : prendre son temps réduit le risque.
+setInterval(() => {
+  if (riskGauge > 0) {
+    riskGauge = Math.max(0, riskGauge - 2);
+    updateStats();
+  }
+}, 120);
+
+function updateStats() {
+  const fill = document.getElementById('gauge-fill');
+  fill.style.width = riskGauge + '%';
+  fill.style.background = riskGauge < 50 ? 'var(--green)' : (riskGauge < 80 ? 'var(--orange)' : 'var(--red)');
+
+  const cleared = relevantCells.filter(i => cellState[i] === 0).length;
+  const progress = Math.round((cleared / relevantCells.length) * 100);
+  document.getElementById('stat-progress').textContent = `Dégagement : ${progress}%`;
+  document.getElementById('stat-value').textContent = `Valeur scientifique : ${scienceValue}%`;
+  document.getElementById('stat-cracks').textContent = `Fissures : ${crackCount}`;
+
+  document.getElementById('btn-go-etude').disabled = progress < 85;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+document.getElementById('btn-go-etude').addEventListener('click', () => {
+  document.getElementById('resultat-summary').textContent =
+    `Valeur scientifique finale : ${scienceValue}% — ${crackCount} fissure(s) au cours de la préparation.`;
+  showScreen('screen-resultat');
+});
+
+document.getElementById('btn-restart').addEventListener('click', () => window.location.reload());
+
+// ---------- Sons synthétisés (Web Audio API, aucun fichier externe) ----------
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function playTone(freq, duration, type, peakGain) {
+  const ac = getAudioCtx();
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, ac.currentTime);
+  gain.gain.linearRampToValueAtTime(peakGain, ac.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+  osc.connect(gain).connect(ac.destination);
+  osc.start();
+  osc.stop(ac.currentTime + duration);
+}
+
+function playToolSwitchSound() {
+  playTone(520, 0.09, 'triangle', 0.18);
+}
+
+function playCrackSound() {
+  const ac = getAudioCtx();
+  // bruit blanc filtré (craquement) + coup grave (impact), pour un rendu plus marqué qu'un simple bip
+  const bufferSize = Math.floor(ac.sampleRate * 0.18);
+  const buffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+  }
+  const noise = ac.createBufferSource();
+  noise.buffer = buffer;
+  const filter = ac.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1200;
+  const noiseGain = ac.createGain();
+  noiseGain.gain.setValueAtTime(0.5, ac.currentTime);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.18);
+  noise.connect(filter).connect(noiseGain).connect(ac.destination);
+  noise.start();
+
+  playTone(140, 0.25, 'sine', 0.35);
+}
+
+// --- Initialisation ---
+render();
+updateStats();
+</script>
+</body>
+</html>

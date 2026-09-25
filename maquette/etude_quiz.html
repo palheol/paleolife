@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PALEO-LIFE — Maquette Étude (Quiz + Cartel)</title>
+<style>
+  :root {
+    --wood: #6b4a34;
+    --wood-dark: #4a3123;
+    --cream: #f3e6d0;
+    --ink: #2c2117;
+    --accent: #c97b3d;
+    --green: #6a9955;
+    --red: #c1543f;
+    --gold: #b8892f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Verdana, sans-serif;
+    background: linear-gradient(180deg, #f7ead2, #e7d3ad);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px 60px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.4em; }
+  .subtitle { margin: 0 0 20px; color: #6b5a44; font-size: 0.9em; }
+  .screen { display: none; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 640px; }
+  .screen.active { display: flex; }
+  .panel {
+    background: var(--cream);
+    border: 2px solid var(--wood);
+    border-radius: 10px;
+    padding: 20px;
+    width: 100%;
+  }
+  .fossil-card { display: flex; gap: 16px; align-items: center; }
+  .fossil-thumb {
+    width: 90px; height: 90px;
+    background: var(--wood);
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.75em;
+    padding: 2px 10px;
+    border-radius: 12px;
+    margin-bottom: 6px;
+  }
+  .question-text { font-size: 1.15em; margin: 6px 0 14px; }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .option-btn {
+    background: #fff8ec;
+    border: 2px solid var(--wood);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.95em;
+  }
+  .option-btn:hover:not(:disabled) { background: #ffefd6; }
+  .option-btn.correct { background: var(--green); color: #fff; border-color: #4d7a3d; }
+  .option-btn.wrong { background: var(--red); color: #fff; border-color: #8a3527; }
+  .option-btn:disabled { cursor: default; }
+  .hint {
+    background: #fff2d9;
+    border-left: 4px solid var(--gold);
+    padding: 8px 12px;
+    font-size: 0.88em;
+    border-radius: 4px;
+    display: none;
+  }
+  .hint.show { display: block; }
+  .progress-dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #d9c6a3; }
+  .dot.done { background: var(--accent); }
+  .dot.current { background: var(--wood-dark); }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  button.primary:disabled { background: #c9b89a; cursor: not-allowed; }
+  /* --- Cartel --- */
+  .cartel {
+    background: #fffaf0;
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+    padding: 16px;
+    width: 100%;
+  }
+  .cartel-field {
+    padding: 6px 0;
+    border-bottom: 1px dashed #d9c6a3;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.5s, transform 0.5s;
+  }
+  .cartel-field.revealed { opacity: 1; transform: translateY(0); }
+  .cartel-field:last-child { border-bottom: none; }
+  .cartel-label { font-size: 0.75em; text-transform: uppercase; color: #8a7355; letter-spacing: 0.04em; }
+  .cartel-value { font-size: 1em; }
+  .cartel-locked { color: #b3a488; font-style: italic; font-size: 0.85em; padding: 6px 0; }
+  .money { font-size: 1.3em; color: var(--gold); font-weight: bold; text-align: center; }
+  .note { font-size: 0.8em; color: #6b5a44; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="error-banner" style="display:none; position:fixed; top:0; left:0; right:0; background:#c1543f; color:#fff; padding:10px 16px; font-size:0.85em; z-index:999;"></div>
+<script>
+// Filet de sécurité : affiche l'erreur JS directement sur la page (pratique sans les outils développeur)
+window.addEventListener('error', function (e) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = 'Erreur JS : ' + e.message + ' (ligne ' + e.lineno + ')';
+  banner.style.display = 'block';
+});
+</script>
+
+<h1>PALEO-LIFE — Maquette : Étude (Quiz + Cartel)</h1>
+<p class="subtitle">Données factices — quiz non bloquant, cartel par paliers (voir GDD §3.3)</p>
+
+<!-- ===================== ÉCRAN INTRO ===================== -->
+<div id="screen-intro" class="screen active">
+  <div class="panel fossil-card">
+    <div class="fossil-thumb"></div>
+    <div>
+      <span class="badge">Fossile préparé au labo</span>
+      <p style="margin:4px 0 0;">Un spécimen vient d'être dégagé. Réponds au petit quiz pour compléter sa fiche d'étude — le cartel se remplira selon tes réponses.</p>
+    </div>
+  </div>
+  <button class="primary" id="btn-start-quiz">Commencer l'étude →</button>
+</div>
+
+<!-- ===================== ÉCRAN QUIZ ===================== -->
+<div id="screen-quiz" class="screen">
+  <div class="progress-dots" id="progress-dots"></div>
+  <div class="panel">
+    <span class="badge" id="question-category">Anatomie</span>
+    <p class="question-text" id="question-text"></p>
+    <div class="options" id="question-options"></div>
+    <div class="hint" id="question-hint"></div>
+  </div>
+  <button class="primary" id="btn-next-question" style="display:none;">Question suivante →</button>
+</div>
+
+<!-- ===================== ÉCRAN CARTEL ===================== -->
+<div id="screen-cartel" class="screen">
+  <div class="panel">
+    <h2 style="margin-top:0;">Fiche du fossile</h2>
+    <div class="cartel" id="cartel-box"></div>
+  </div>
+  <div class="panel">
+    <p class="money" id="money-earned"></p>
+    <p class="note">Le quiz ne bloque jamais l'accès à l'exposition, même avec un score bas : seul le niveau de détail du cartel et l'argent gagné varient.</p>
+  </div>
+  <button class="primary" id="btn-restart">↺ Recommencer la maquette</button>
+</div>
+
+<script>
+// ============================================================
+// PALEO-LIFE — maquette Étude (quiz + cartel progressif)
+// Code minimal, données factices (règle "maquette d'abord")
+// ============================================================
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// --- Fossile factice à l'étude ---
+const fossil = {
+  genus: 'Propalaeotherium',
+  species: 'hassiacum',
+  // Localité réelle de l'espèce (indépendante du choix, encore ouvert, du gisement jouable de la V1 — voir GDD §8)
+  locality: 'Fosse de Messel, Hesse (Allemagne)',
+  age: 'Éocène (environ 47 millions d\'années)',
+  family: 'Palaeotheriidae',
+  adultLength: 'environ 30 cm au garrot (taille d\'un petit chien)',
+  description: 'Petit mammifère herbivore de la famille des Palaeotheriidae, cousine proche mais non ancêtre des chevaux actuels : cette lignée s\'est éteinte sans descendance à la fin de l\'Éocène. Vivait dans les sous-bois denses et humides d\'Europe occidentale.'
+};
+
+// --- Questions factices (anatomie / famille / âge / gisement) ---
+const questions = [
+  {
+    category: 'Anatomie',
+    text: `Combien de doigts ce fossile possède-t-il à chaque patte avant ?`,
+    options: ['2 doigts', '3 doigts', '4 doigts', '5 doigts'],
+    correct: 2,
+    hint: `Indice : contrairement aux chevaux actuels (1 seul doigt), les pattes avant de cet animal primitif n'ont pas encore perdu leurs doigts latéraux.`
+  },
+  {
+    category: 'Famille',
+    text: `À quelle famille appartient ce fossile ?`,
+    options: ['Equidae (chevaux modernes)', 'Palaeotheriidae', 'Rhinocerotidae', 'Tapiridae'],
+    correct: 1,
+    hint: `Indice : c'est une famille éteinte de mammifères primitifs, distincte de la famille des chevaux actuels bien qu'apparentée.`
+  },
+  {
+    category: 'Âge',
+    text: `À quelle époque géologique vivait cet animal ?`,
+    options: ['Jurassique', 'Crétacé', 'Éocène', 'Miocène'],
+    correct: 2,
+    hint: `Indice : cette époque se situe au début de l'ère Cénozoïque, après la disparition des dinosaures non aviens.`
+  },
+  {
+    category: 'Gisement',
+    text: `Ce type de fossile est typiquement trouvé sur quel genre de gisement ?`,
+    options: [
+      'Un désert de dunes de sable',
+      'Un fond de lac tropical, en couches fines et bien conservées',
+      'Un récif corallien',
+      'Une moraine glaciaire'
+    ],
+    correct: 1,
+    hint: `Indice : ce sont des sédiments déposés très lentement au fond d'une eau calme qui permettent une préservation exceptionnelle des détails.`
+  }
+];
+
+let currentQuestion = 0;
+let score = 0;
+let maxScore = questions.length * 25;
+
+// --- Pastilles de progression ---
+const dotsWrap = document.getElementById('progress-dots');
+questions.forEach(() => {
+  const dot = document.createElement('div');
+  dot.className = 'dot';
+  dotsWrap.appendChild(dot);
+});
+
+function updateDots() {
+  const dots = dotsWrap.children;
+  for (let i = 0; i < dots.length; i++) {
+    dots[i].className = 'dot' + (i < currentQuestion ? ' done' : (i === currentQuestion ? ' current' : ''));
+  }
+}
+
+function renderQuestion() {
+  const q = questions[currentQuestion];
+  document.getElementById('question-category').textContent = q.category;
+  document.getElementById('question-text').textContent = q.text;
+  document.getElementById('question-hint').classList.remove('show');
+  document.getElementById('btn-next-question').style.display = 'none';
+  updateDots();
+
+  const optionsWrap = document.getElementById('question-options');
+  optionsWrap.innerHTML = '';
+  let attempts = 0;
+  let answered = false;
+
+  q.options.forEach((label, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = label;
+    btn.addEventListener('click', () => {
+      if (answered) return;
+      if (idx === q.correct) {
+        // Bonne réponse : moins de points si elle arrive après un indice, mais jamais bloquant.
+        answered = true;
+        btn.classList.add('correct');
+        Array.from(optionsWrap.children).forEach(b => b.disabled = true);
+        const points = attempts === 0 ? 25 : 15;
+        score += points;
+        document.getElementById('btn-next-question').style.display = 'inline-block';
+      } else {
+        attempts++;
+        btn.classList.add('wrong');
+        btn.disabled = true;
+        const hintBox = document.getElementById('question-hint');
+        hintBox.textContent = q.hint;
+        hintBox.classList.add('show');
+      }
+    });
+    optionsWrap.appendChild(btn);
+  });
+}
+
+document.getElementById('btn-start-quiz').addEventListener('click', () => {
+  showScreen('screen-quiz');
+  renderQuestion();
+});
+
+document.getElementById('btn-next-question').addEventListener('click', () => {
+  currentQuestion++;
+  if (currentQuestion >= questions.length) {
+    showCartel();
+  } else {
+    renderQuestion();
+  }
+});
+
+// --- Cartel progressif selon le score ---
+function showCartel() {
+  updateDots();
+  const pct = Math.round((score / maxScore) * 100);
+
+  const fields = [
+    { label: 'Nom scientifique', value: `<em>${fossil.genus} ${fossil.species}</em>`, threshold: 0 },
+    { label: 'Localisation', value: fossil.locality, threshold: 0 },
+    { label: 'Âge', value: fossil.age, threshold: 0 },
+    { label: 'Famille', value: fossil.family, threshold: 40 },
+    { label: 'Taille adulte', value: fossil.adultLength, threshold: 60 },
+    { label: 'Description', value: fossil.description, threshold: 80 }
+  ];
+
+  const box = document.getElementById('cartel-box');
+  box.innerHTML = '';
+  fields.forEach((f, i) => {
+    const unlocked = pct >= f.threshold;
+    const div = document.createElement('div');
+    if (unlocked) {
+      div.className = 'cartel-field';
+      div.innerHTML = `<div class="cartel-label">${f.label}</div><div class="cartel-value">${f.value}</div>`;
+    } else {
+      div.className = 'cartel-field cartel-locked';
+      div.textContent = `🔒 ${f.label} — à débloquer avec un meilleur score`;
+    }
+    box.appendChild(div);
+    // révélation progressive (petit effet visuel)
+    setTimeout(() => div.classList.add('revealed'), 150 + i * 120);
+  });
+
+  const money = Math.round(score * 2); // monnaie factice, formule à définir plus tard (GDD §8)
+  document.getElementById('money-earned').textContent = `💰 Argent gagné : ${money} pièces (score : ${pct}%)`;
+
+  showScreen('screen-cartel');
+}
+
+document.getElementById('btn-restart').addEventListener('click', () => window.location.reload());
+</script>
+</body>
+</html>
