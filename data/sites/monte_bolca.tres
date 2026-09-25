@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "monte_bolca"
+site_name = "Monte Bolca"
+region = "Vénétie, Italie"
+formation = "Calcaire de Bolca (Pesciara)"
+era_label = "Éocène (environ 50 millions d'années)"
+age_ma = 50.0
+description = "Gisement marin tropical d'exception livrant une faune de poissons et d'autres organismes marins remarquablement diversifiée et bien conservée."
+fossil_ids = PackedStringArray("scorpaena_sp")

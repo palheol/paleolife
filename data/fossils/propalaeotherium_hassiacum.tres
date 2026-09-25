@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "propalaeotherium_hassiacum"
+genus = "Propalaeotherium"
+species = "hassiacum"
+author_year = "von Koenigswald, 1977"
+taxon_class = "Mammalia"
+taxon_order = "Perissodactyla"
+family = "Palaeotheriidae"
+site_id = "messel"
+age_label = "Éocène (environ 47 millions d'années)"
+age_ma = 47.0
+size_label = "hauteur au garrot d'environ 30 cm (taille d'un petit chien)"
+size_cm = 30.0
+description = "Petit mammifère herbivore de la famille des Palaeotheriidae, cousine proche mais non ancêtre des chevaux actuels : cette lignée s'est éteinte sans descendance à la fin de l'Éocène. Vivait dans les sous-bois denses et humides d'Europe occidentale."
+specimen_status = "original"
+model_path = ""
+icon_placeholder = "🐴"

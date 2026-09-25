@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "scorpaena_sp"
+genus = "Scorpaena"
+species = ""
+author_year = ""
+taxon_class = "Actinopterygii"
+taxon_order = "Scorpaeniformes"
+family = "Scorpaenidae"
+site_id = "monte_bolca"
+age_label = "Éocène (environ 50 millions d'années)"
+age_ma = 50.0
+size_label = "longueur totale estimée à 15-20 cm"
+size_cm = 17.0
+description = "Poisson à nageoires épineuses ; chez les espèces actuelles de ce genre, certaines épines sont venimeuses. Le calcaire de Bolca livre une faune ichtyologique marine tropicale remarquablement diversifiée. Identification limitée au genre (spécimen non déterminé à l'espèce)."
+specimen_status = "original"
+model_path = ""
+icon_placeholder = "🐟"

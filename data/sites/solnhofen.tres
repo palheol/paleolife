@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "solnhofen"
+site_name = "Calcaires de Solnhofen"
+region = "Bavière, Allemagne"
+formation = "Plattenkalk de Solnhofen"
+era_label = "Jurassique supérieur (environ 150 millions d'années)"
+age_ma = 150.0
+description = "Calcaire lithographique à grain très fin, déposé dans un lagon tropical calme, célèbre pour la qualité exceptionnelle de préservation de ses fossiles, dont Archaeopteryx."
+fossil_ids = PackedStringArray("archaeopteryx_lithographica")

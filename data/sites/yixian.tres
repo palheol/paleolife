@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "yixian"
+site_name = "Formation de Yixian"
+region = "Liaoning, Chine"
+formation = "Formation de Yixian (Biota de Jehol)"
+era_label = "Crétacé inférieur (environ 125 millions d'années)"
+age_ma = 125.0
+description = "Célèbre formation géologique chinoise à l'origine de milliers de fossiles exceptionnellement conservés (plumes, tissus mous), incluant certains des plus anciens oiseaux connus."
+fossil_ids = PackedStringArray("confuciusornis_sanctus")

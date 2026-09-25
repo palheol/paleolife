@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "archaeopteryx_lithographica"
+genus = "Archaeopteryx"
+species = "lithographica"
+author_year = "von Meyer, 1861"
+taxon_class = "Reptilia (Dinosauria)"
+taxon_order = "Theropoda"
+family = "Archaeopterygidae"
+site_id = "solnhofen"
+age_label = "Jurassique supérieur (environ 150 millions d'années)"
+age_ma = 150.0
+size_label = "taille d'un corbeau, envergure d'environ 50 cm"
+size_cm = 50.0
+description = "Fossile emblématique illustrant la transition entre dinosaures théropodes non-aviens et oiseaux : il possédait encore des dents et une longue queue osseuse, mais aussi des plumes bien développées."
+specimen_status = "original"
+model_path = ""
+icon_placeholder = "🦖"

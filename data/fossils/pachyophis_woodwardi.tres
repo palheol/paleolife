@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "pachyophis_woodwardi"
+genus = "Pachyophis"
+species = "woodwardi"
+author_year = "Nopcsa, 1923"
+taxon_class = "Reptilia"
+taxon_order = "Squamata"
+family = ""
+site_id = "podumci"
+age_label = "Crétacé supérieur (environ 95 millions d'années)"
+age_ma = 95.0
+size_label = "longueur totale estimée à environ 1 mètre"
+size_cm = 100.0
+description = "Serpent marin primitif conservant des vestiges de pattes postérieures, souvent cité dans le débat scientifique sur l'origine aquatique ou terrestre des serpents. Position familiale encore discutée (family laissé vide)."
+specimen_status = "original"
+model_path = ""
+icon_placeholder = "🐍"

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "podumci"
+site_name = "Podumci"
+region = "Bosnie-Herzégovine"
+formation = "Calcaires crétacés de la plateforme carbonatée adriatique"
+era_label = "Crétacé supérieur (environ 95 millions d'années)"
+age_ma = 95.0
+description = "Site associé à des reptiles marins du Crétacé, dont des serpents primitifs encore pourvus de vestiges de pattes postérieures, importants pour le débat sur l'origine des serpents."
+fossil_ids = PackedStringArray("pachyophis_woodwardi")

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "messel"
+site_name = "Fosse de Messel"
+region = "Hesse, Allemagne"
+formation = "Schistes bitumineux de Messel (Grube Messel)"
+era_label = "Éocène (environ 47 millions d'années)"
+age_ma = 47.0
+description = "Ancien lac volcanique classé au patrimoine mondial de l'UNESCO, réputé pour la préservation exceptionnelle de sa faune (mammifères, oiseaux, reptiles, poissons, insectes) en couches fines de schiste bitumineux."
+fossil_ids = PackedStringArray("propalaeotherium_hassiacum")
