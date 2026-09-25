@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PALEO-LIFE - maquette boucle complete</title>
+<style>
+body{font-family:sans-serif;background:#eee;padding:10px}
+section{background:#fff;border:2px solid #333;margin:10px 0;padding:10px}
+h2{margin:0 0 8px}
+.grid{display:grid;gap:2px}
+.cell{width:30px;height:30px;background:#a88;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+.cell.empty{background:#ccc}
+.cell.done{background:#8a8}
+.cell.slot{background:#dde}
+.cell.slot.filled{background:#88d;color:#fff}
+.cell.diorama{background:#d8a}
+button{margin:2px;cursor:pointer}
+#dots{height:40px;position:relative;background:#cfc;overflow:hidden}
+.dot{width:14px;height:14px;border-radius:50%;background:#333;position:absolute;top:12px;transition:left 2s linear}
+#money{font-weight:bold;font-size:1.3em}
+.labo{border:1px dashed #666;padding:6px;margin:4px 0}
+</style>
+</head>
+<body>
+
+<h1>PALEO-LIFE - maquette boucle complete (jetable)</h1>
+<p id="money">Argent : 0</p>
+
+<section>
+<h2>1. Gisement</h2>
+<p>Clique les cases pour chercher des blocs.</p>
+<div class="grid" id="gisement" style="grid-template-columns:repeat(8,32px)"></div>
+</section>
+
+<section>
+<h2>2. Labo</h2>
+<p>Outil : <button id="toolFast">Rapide (risque)</button><button id="toolSlow">Lent (sans risque)</button> - actif: <span id="toolLabel">lent</span></p>
+<div id="labos"></div>
+</section>
+
+<section>
+<h2>3. Quiz</h2>
+<div id="quiz"></div>
+</section>
+
+<section>
+<h2>4. Salle</h2>
+<div class="grid" id="room" style="grid-template-columns:repeat(8,32px)"></div>
+</section>
+
+<section>
+<h2>5. Visiteurs</h2>
+<div id="dots"></div>
+</section>
+
+<section>
+<h2>6. Achat</h2>
+<button id="buyDiorama">Acheter diorama (100)</button>
+<button id="buyTool">Ameliorer outil rapide - moins de casse (60)</button>
+<p id="shopMsg"></p>
+</section>
+
+<script>
+// etat global (maquette jetable, pas de propre)
+let money = 0;
+let tool = 'slow';
+let fastRisk = 0.3;
+const FOSSILS = ['Fossile A','Fossile B','Fossile C'];
+let blocks = {}; // name -> {cells:15 vides, cracks, ready, studied, score, exposed}
+let vitrines = 0, dioramas = 0, exhibitBonus = 0;
+
+function updateMoney(){ document.getElementById('money').textContent = 'Argent : ' + money; }
+
+// --- 1. Gisement ---
+const gis = document.getElementById('gisement');
+const nCells = 32;
+let blockCells = [];
+while(blockCells.length < 3){
+  const r = Math.floor(Math.random()*nCells);
+  if(!blockCells.includes(r)) blockCells.push(r);
+}
+for(let i=0;i<nCells;i++){
+  const c = document.createElement('div');
+  c.className = 'cell';
+  const idx = blockCells.indexOf(i);
+  c.addEventListener('click', () => {
+    if(c.classList.contains('empty') || c.classList.contains('done')) return;
+    if(idx >= 0){
+      c.classList.add('done'); c.textContent = FOSSILS[idx][8];
+      startLabo(FOSSILS[idx]);
+    } else {
+      c.classList.add('empty');
+    }
+  });
+  gis.appendChild(c);
+}
+
+// --- 2. Labo ---
+document.getElementById('toolFast').onclick = () => { tool='fast'; document.getElementById('toolLabel').textContent='rapide'; };
+document.getElementById('toolSlow').onclick = () => { tool='slow'; document.getElementById('toolLabel').textContent='lent'; };
+
+function startLabo(name){
+  const box = document.createElement('div');
+  box.className = 'labo';
+  box.innerHTML = '<strong>'+name+'</strong> - fissures: <span class="cr">0</span> <button class="readyBtn" disabled>Pret pour le quiz</button><br>';
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  grid.style.gridTemplateColumns = 'repeat(5,28px)';
+  box.appendChild(grid);
+  document.getElementById('labos').appendChild(box);
+
+  const state = { cellsLeft: 15, cracks: 0, ready:false, studied:false, score:0, exposed:false };
+  blocks[name] = state;
+
+  for(let i=0;i<15;i++){
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.addEventListener('click', () => {
+      if(cell.classList.contains('done')) return;
+      if(tool==='fast' && Math.random()<fastRisk){
+        state.cracks++;
+        box.querySelector('.cr').textContent = state.cracks;
+      }
+      cell.classList.add('done');
+      state.cellsLeft--;
+      if(state.cellsLeft<=0){
+        state.ready = true;
+        box.querySelector('.readyBtn').disabled = false;
+      }
+    });
+    grid.appendChild(cell);
+  }
+  box.querySelector('.readyBtn').onclick = () => startQuiz(name);
+}
+
+// --- 3. Quiz (2 questions factices, memes pour tous) ---
+function startQuiz(name){
+  const q = document.getElementById('quiz');
+  const box = document.createElement('div');
+  box.className = 'labo';
+  box.innerHTML = '<strong>Quiz - '+name+'</strong><br>'+
+    'Q1. Cet animal est un vertebre ? <button data-q="1" data-a="1">Oui</button><button data-q="1" data-a="0">Non</button><br>'+
+    'Q2. A vecu il y a plus de 10 millions d\'annees ? <button data-q="2" data-a="1">Oui</button><button data-q="2" data-a="0">Non</button><br>'+
+    '<button class="exposeBtn" disabled>Exposer</button>';
+  document.getElementById('quiz').appendChild(box);
+
+  let answered = {1:false,2:false};
+  box.querySelectorAll('button[data-q]').forEach(b => {
+    b.addEventListener('click', () => {
+      const qn = b.dataset.q;
+      if(answered[qn]) return;
+      answered[qn] = true;
+      if(b.dataset.a === '1') blocks[name].score++;
+      if(answered[1] && answered[2]) box.querySelector('.exposeBtn').disabled = false;
+    });
+  });
+  box.querySelector('.exposeBtn').onclick = () => { blocks[name].studied = true; exposeFossil(name); };
+}
+
+// --- 4. Salle ---
+const room = document.getElementById('room');
+const roomCells = [];
+for(let i=0;i<24;i++){
+  const c = document.createElement('div');
+  c.className = 'cell slot';
+  room.appendChild(c);
+  roomCells.push(c);
+}
+function exposeFossil(name){
+  const empty = roomCells.find(c => !c.classList.contains('filled') && !c.classList.contains('diorama'));
+  if(!empty) return;
+  empty.classList.add('filled');
+  empty.textContent = name[8];
+  vitrines++;
+  const quality = Math.max(0, 2 - blocks[name].cracks);
+  exhibitBonus += blocks[name].score + quality;
+  blocks[name].exposed = true;
+}
+
+// --- 5. Visiteurs (pastilles qui rapportent de l'argent) ---
+setInterval(() => {
+  if(vitrines + dioramas <= 0) return;
+  const lane = document.getElementById('dots');
+  const dot = document.createElement('div');
+  dot.className = 'dot';
+  dot.style.left = '0px';
+  lane.appendChild(dot);
+  requestAnimationFrame(() => { dot.style.left = (lane.clientWidth-14)+'px'; });
+  setTimeout(() => {
+    dot.remove();
+    money += 2 + vitrines + dioramas*3 + exhibitBonus;
+    updateMoney();
+  }, 2000);
+}, 1500);
+
+// --- 6. Achat ---
+document.getElementById('buyDiorama').onclick = () => {
+  if(money < 100){ document.getElementById('shopMsg').textContent = 'Pas assez d\'argent'; return; }
+  const empty = roomCells.find(c => !c.classList.contains('filled') && !c.classList.contains('diorama'));
+  if(!empty){ document.getElementById('shopMsg').textContent = 'Plus de place'; return; }
+  money -= 100; updateMoney();
+  empty.classList.add('diorama'); empty.textContent='D';
+  dioramas++;
+  document.getElementById('shopMsg').textContent = 'Diorama achete !';
+};
+document.getElementById('buyTool').onclick = () => {
+  if(money < 60){ document.getElementById('shopMsg').textContent = 'Pas assez d\'argent'; return; }
+  money -= 60; updateMoney();
+  fastRisk = Math.max(0.05, fastRisk - 0.15);
+  document.getElementById('shopMsg').textContent = 'Outil rapide ameliore ! risque = '+Math.round(fastRisk*100)+'%';
+};
+
+updateMoney();
+</script>
+</body>
+</html>
