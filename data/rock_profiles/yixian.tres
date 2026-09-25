@@ -16,5 +16,5 @@ mottle_strength = 0.28
 lamination_scale = 1600.0
 lamination_strength = 0.3
 roughness = 0.88
-layer_count = 5
+layer_count = 2
 layer_height = 0.004

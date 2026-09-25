@@ -64,21 +64,25 @@ void vertex() {
 }
 
 void fragment() {
-	float macro = fbm(v_world * mottle_scale);           // grandes taches
-	float meso = fbm(v_world * mottle_scale * 5.0);      // variations moyennes
-	float grain = value_noise(v_world * grain_scale);    // grain fin
+	float macro = fbm(v_world * mottle_scale);              // grandes taches
+	float meso = fbm(v_world * mottle_scale * 5.0);         // variations moyennes
+	float grain = value_noise(v_world * grain_scale);       // grain fin
+	float micro = value_noise(v_world * grain_scale * 3.7); // piquete mineral
 
 	// Le litage se lit differemment selon l'orientation de la face :
 	// - sur les tranches (parois creusees), on voit les lamines empilees ;
 	// - sur un plan de stratification vu de dessus, on ne voit pas de lamines
 	//   mais de fines trainees paralleles dans le plan du banc.
 	float laminae = abs(sin(v_world.y * lamination_scale + macro * 3.0));
-	float streaks = fbm(vec3(v_world.x * 2.5, 0.0, v_world.z * 55.0));
+	float streaks = fbm(vec3(v_world.x * 3.0, 0.0, v_world.z * 190.0));
 	float upness = clamp(abs(v_normal_world.y), 0.0, 1.0);
 	float bedding = mix(laminae, streaks, upness);
 
 	vec3 col = mix(base_color, accent_color, clamp(macro * mottle_strength * 3.0, 0.0, 1.0));
 	col *= 1.0 + (meso - 0.5) * mottle_strength;
+	// Contraste accru sur le grain : sans cela le bruit interpole donne un aspect
+	// de camouflage flou plutot qu'une roche.
+	col *= 1.0 + (micro - 0.5) * grain_strength * 1.6;
 	// Plus on descend dans le bloc, plus la roche est "fraiche" (moins patinee).
 	col = mix(col, deep_color, clamp((1.0 - v_layer) * 0.8, 0.0, 1.0));
 	col *= 1.0 + (grain - 0.5) * grain_strength * 2.0;

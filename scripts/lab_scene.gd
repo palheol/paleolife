@@ -16,16 +16,28 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 @export_group("Plaque")
 ## Plus grande dimension horizontale visee pour le specimen, en metres.
 @export var specimen_size_m: float = 0.45
-@export var cell_size: float = 0.01
+@export var cell_size: float = 0.005
 ## Marge de gangue autour du specimen, en metres.
 @export var margin_m: float = 0.015
-## De combien le point le plus haut du fossile depasse une fois la gangue retiree.
-@export var protrusion_m: float = 0.0015
+## Jeu entre le dessous de la gangue et le specimen. Assez grand pour absorber
+## l'erreur residuelle du filtrage, assez petit pour que le fossile apparaisse
+## juste sous l'ouverture une fois la derniere couche retiree.
+@export var clearance_m: float = 0.0022
+
+## A quel point la gangue epouse le relief du specimen (0 = dalle plate posee
+## dessus, 1 = la roche l'habille exactement).
+## Le drapé n'est pas cosmetique : avec une base plate, seul le point le plus
+## haut du specimen touche la gangue et degager n'ouvre qu'une cavite vide.
+@export_range(0.0, 1.0, 0.05) var relief_follow: float = 0.35
+## Profondeur maximale, en metres, sur laquelle la gangue suit le relief. Les
+## scans incluent souvent les flancs et le support du bloc : sans cette limite,
+## la roche plongerait de 20 cm la ou la face utile s'arrete.
+@export var max_drape_depth_m: float = 0.012
 
 @export_group("Indice de depart")
 ## Petite zone deja erodee qui laisse deviner ou commencer (comme un fossile
 ## qui affleure naturellement sur le terrain).
-@export var hint_radius_cells: int = 3
+@export var hint_radius_cells: int = 6
 @export var hint_remaining_layers: int = 0
 ## Fraction centrale de la plaque ou chercher le point d'affleurement (0.6 = 60 %).
 @export_range(0.1, 1.0, 0.05) var hint_search_area: float = 0.55
@@ -33,18 +45,30 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 @export_group("Import du scan")
 ## Fragments de noms de noeuds a ignorer dans le GLB (objets parasites Sketchfab).
 @export var excluded_node_names: PackedStringArray = PackedStringArray(["Cube"])
+## Redresse la dalle scannee a l'horizontale. Les scans de musee arrivent dans
+## une orientation quelconque, et une plaque inclinee rend la gangue inexploitable.
+@export var level_specimen: bool = true
+## Les scans de musee sont photographies sous un eclairage de studio, deja cuit
+## dans la texture. Sans correction, la piece degagee part en blanc pur.
+@export_range(0.1, 1.5, 0.05) var specimen_brightness: float = 0.5
 
 @onready var _slab: RockSlab = $RockSlab
 @onready var _fossil_root: Node3D = $FossilRoot
 @onready var _camera: OrbitCamera = $OrbitCamera
 @onready var _key_light: DirectionalLight3D = $KeyLight
 @onready var _fill_light: DirectionalLight3D = $FillLight
+@onready var _cracks: Node3D = $Cracks
+@onready var _dig: DigController = $DigController
+@onready var _ui: LabUI = $LabUI
 
-var _status_label: Label
+## Altitude du specimen sous chaque cellule de la grille, et masque des cellules
+## qui le recouvrent reellement (le reste n'est que de la marge).
+var _specimen_top: PackedFloat32Array = PackedFloat32Array()
+var _specimen_mask: PackedByteArray = PackedByteArray()
 
 func _ready() -> void:
 	_build_lighting()
-	_build_status_label()
+	_connect_ui()
 
 	if rock_profile == null:
 		_warn("Aucun profil de roche assigne sur la scene Lab.")
@@ -60,12 +84,14 @@ func _ready() -> void:
 	if meshes.is_empty():
 		return
 
-	_build_slab(_specimen_footprint(meshes))
-	_carve_starting_hint(meshes)
+	_build_slab(_specimen_footprint(meshes), meshes)
+	_carve_starting_hint()
 
 	_camera.focus_on(
-		Vector3(0.0, _slab.position.y + _slab.surface_y() * 0.5, 0.0),
+		Vector3(0.0, _slab.position.y + _slab.max_top() * 0.5, 0.0),
 		maxf(_slab.size_x(), _slab.size_z()))
+
+	_dig.setup(_slab, _camera, _cracks, _specimen_mask)
 
 	var title := rock_profile.display_name
 	if fossil != null:
@@ -100,6 +126,9 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 		_warn("Aucun maillage exploitable dans %s." % fossil.model_path)
 		return empty
 
+	if level_specimen:
+		_level_specimen(model, meshes)
+
 	var bounds := _combined_aabb(model, meshes)
 	var largest := maxf(bounds.size.x, bounds.size.z)
 	if largest <= 0.0:
@@ -111,7 +140,100 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 
 	var scaled := AABB(bounds.position * scale_factor, bounds.size * scale_factor)
 	model.position = Vector3(-scaled.get_center().x, -scaled.end.y, -scaled.get_center().z)
+	_tone_down_specimen(meshes)
 	return meshes
+
+## Assombrit le scan sans toucher a la roche, via des surcharges de materiau
+## (l'original importe reste intact).
+func _tone_down_specimen(meshes: Array[MeshInstance3D]) -> void:
+	if is_equal_approx(specimen_brightness, 1.0):
+		return
+	for instance in meshes:
+		for surface in instance.mesh.get_surface_count():
+			var source := instance.mesh.surface_get_material(surface) as BaseMaterial3D
+			if source == null:
+				continue
+			var copy := source.duplicate() as BaseMaterial3D
+			copy.albedo_color = Color(
+				source.albedo_color.r * specimen_brightness,
+				source.albedo_color.g * specimen_brightness,
+				source.albedo_color.b * specimen_brightness,
+				source.albedo_color.a)
+			instance.set_surface_override_material(surface, copy)
+
+## Redresse le scan : on ajuste un plan moyen sur ses sommets (analyse en
+## composantes principales) et on bascule ce plan a l'horizontale. Sans cela une
+## dalle scannee de travers donnerait une gangue en escalier geant.
+func _level_specimen(model: Node3D, meshes: Array[MeshInstance3D]) -> void:
+	var points := _sample_points(model, meshes, 8000)
+	if points.size() < 32:
+		return
+
+	var centroid := Vector3.ZERO
+	for point in points:
+		centroid += point
+	centroid /= float(points.size())
+
+	# Matrice de covariance (symetrique) des ecarts au centre de gravite.
+	var xx := 0.0
+	var xy := 0.0
+	var xz := 0.0
+	var yy := 0.0
+	var yz := 0.0
+	var zz := 0.0
+	for point in points:
+		var d := point - centroid
+		xx += d.x * d.x
+		xy += d.x * d.y
+		xz += d.x * d.z
+		yy += d.y * d.y
+		yz += d.y * d.z
+		zz += d.z * d.z
+
+	var covariance := Basis(Vector3(xx, xy, xz), Vector3(xy, yy, yz), Vector3(xz, yz, zz))
+	var normal := _flattest_axis(covariance)
+	if normal.dot(Vector3.UP) < 0.0:
+		normal = -normal
+	if normal.is_equal_approx(Vector3.UP):
+		return
+	model.transform = Transform3D(Basis(Quaternion(normal, Vector3.UP)), Vector3.ZERO) * model.transform
+
+## Direction dans laquelle le nuage de points est le plus aplati : c'est la
+## normale du plan moyen, donc celle de la dalle.
+func _flattest_axis(covariance: Basis) -> Vector3:
+	var trace := covariance.x.x + covariance.y.y + covariance.z.z
+	if trace <= 0.0:
+		return Vector3.UP
+	# En retranchant la covariance a un multiple de l'identite, on inverse l'ordre
+	# des valeurs propres : la plus petite devient la plus grande, et une simple
+	# iteration de la puissance suffit a la trouver.
+	var shifted := Basis(
+		Vector3(trace - covariance.x.x, -covariance.x.y, -covariance.x.z),
+		Vector3(-covariance.y.x, trace - covariance.y.y, -covariance.y.z),
+		Vector3(-covariance.z.x, -covariance.z.y, trace - covariance.z.z))
+	var axis := Vector3(0.37, 0.61, 0.70).normalized()
+	for iteration in 64:
+		axis = shifted * axis
+		if axis.length() < 0.000001:
+			return Vector3.UP
+		axis = axis.normalized()
+	return axis
+
+func _sample_points(root: Node3D, meshes: Array[MeshInstance3D], wanted: int) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for instance in meshes:
+		var relative := root.global_transform.affine_inverse() * instance.global_transform
+		for surface in instance.mesh.get_surface_count():
+			var arrays := instance.mesh.surface_get_arrays(surface)
+			if arrays.is_empty():
+				continue
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var stride := maxi(1, vertices.size() * meshes.size() / maxi(1, wanted))
+			var index := 0
+			while index < vertices.size():
+				points.append(relative * vertices[index])
+				index += stride
+	return points
 
 ## Tous les MeshInstance3D du modele, sauf ceux dont le nom (ou celui d'un parent)
 ## contient un fragment exclu. Les exclus sont masques plutot que supprimes.
@@ -165,15 +287,137 @@ func _specimen_footprint(meshes: Array[MeshInstance3D]) -> Vector2:
 
 # --- Gangue -----------------------------------------------------------------
 
-func _build_slab(footprint: Vector2) -> void:
+func _build_slab(footprint: Vector2, meshes: Array[MeshInstance3D]) -> void:
 	var columns := maxi(2, int(ceil(footprint.x / cell_size)))
 	var rows := maxi(2, int(ceil(footprint.y / cell_size)))
-	_slab.build(rock_profile, columns, rows, cell_size)
+	_slab.position = Vector3.ZERO
+	_rasterise_specimen(meshes, columns, rows)
+	_slab.build(rock_profile, columns, rows, cell_size, _bases_from_specimen(columns, rows))
 	_slab.material_override = _build_rock_material()
-	# La base de la gangue passe legerement sous le sommet du specimen : une fois
-	# la derniere couche retiree, le fossile depasse d'un cheveu au lieu d'affleurer
-	# exactement a ras, ce qui le rendrait invisible.
-	_slab.position = Vector3(0.0, -protrusion_m, 0.0)
+
+## Projette le specimen sur la grille : pour chaque cellule, l'altitude la plus
+## haute atteinte par le scan en dessous. Sert a la fois a faire epouser la
+## gangue au relief et a savoir quelles cellules recouvrent reellement la piece.
+func _rasterise_specimen(meshes: Array[MeshInstance3D], columns: int, rows: int) -> void:
+	var count := columns * rows
+	_specimen_top = PackedFloat32Array()
+	_specimen_top.resize(count)
+	_specimen_top.fill(-INF)
+	_specimen_mask = PackedByteArray()
+	_specimen_mask.resize(count)
+
+	var half_x := float(columns) * cell_size * 0.5
+	var half_z := float(rows) * cell_size * 0.5
+
+	for instance in meshes:
+		var to_scene := global_transform.affine_inverse() * instance.global_transform
+		for surface in instance.mesh.get_surface_count():
+			var arrays := instance.mesh.surface_get_arrays(surface)
+			if arrays.is_empty():
+				continue
+			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+			var stride := maxi(1, vertices.size() / 60000)
+			var index := 0
+			while index < vertices.size():
+				var point := to_scene * vertices[index]
+				index += stride
+				var col := int(floor((point.x + half_x) / cell_size))
+				var row := int(floor((point.z + half_z) / cell_size))
+				if col < 0 or col >= columns or row < 0 or row >= rows:
+					continue
+				var cell := row * columns + col
+				if point.y > _specimen_top[cell]:
+					_specimen_top[cell] = point.y
+					_specimen_mask[cell] = 1
+
+	# Les cellules sans echantillon (marge autour de la piece) sont ramenees au
+	# niveau haut du scan.
+	for cell in count:
+		if _specimen_top[cell] == -INF:
+			_specimen_top[cell] = 0.0
+
+func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
+	# Niveau de reference : la mediane des hauteurs sous lesquelles il y a
+	# vraiment du specimen. Se caler sur le maximum du scan serait trompeur, car
+	# ce maximum est souvent un bord releve du bloc, loin de la face travaillee.
+	var face_level := _median_specimen_level()
+
+	# Tout ce qui s'ecarte trop de ce niveau est ramene dans une fourchette : en
+	# dessous ce sont les flancs du bloc, au-dessus des asperites isolees.
+	var surface := PackedFloat32Array()
+	surface.resize(columns * rows)
+	for cell in surface.size():
+		if _specimen_mask[cell] == 0:
+			surface[cell] = face_level
+			continue
+		surface[cell] = clampf(_specimen_top[cell],
+			face_level - max_drape_depth_m, face_level + max_drape_depth_m)
+
+	# Median puis moyenne : le median ecarte les sommets isoles dus au bruit de
+	# photogrammetrie (une moyenne, elle, les etale au lieu de les enlever), et le
+	# lissage qui suit donne une roche qui drape au lieu de coller au maillage.
+	#
+	# On ne cherche volontairement pas a garantir zero traversee : imposer que la
+	# gangue reste au-dessus du maximum brut de chaque cellule fait ressurgir
+	# chaque asperite du scan sous forme de paroi isolee, ce qui est bien plus
+	# laid que les rares eclats d'os qui affleurent. Le jeu vertical ci-dessous
+	# absorbe l'essentiel, et un bout d'os qui perce reste plausible.
+	_median_filter(surface, columns, rows)
+	_smooth(surface, columns, rows, 5)
+
+	var bases := PackedFloat32Array()
+	bases.resize(columns * rows)
+	for cell in bases.size():
+		# 0 = plaque plate au niveau moyen de la face, 1 = la roche epouse le relief.
+		bases[cell] = lerpf(face_level, surface[cell], relief_follow) + clearance_m
+	return bases
+
+## Hauteur representative de la face travaillee : mediane des cellules qui
+## recouvrent reellement le specimen, insensible aux bords releves du bloc.
+func _median_specimen_level() -> float:
+	var heights: Array[float] = []
+	for cell in _specimen_top.size():
+		if _specimen_mask[cell] != 0:
+			heights.append(_specimen_top[cell])
+	if heights.is_empty():
+		return 0.0
+	heights.sort()
+	return heights[heights.size() / 2]
+
+## Filtre median 3x3 : remplace chaque cellule par la valeur centrale de son
+## voisinage, ce qui ecarte les valeurs aberrantes sans adoucir les vraies pentes.
+func _median_filter(values: PackedFloat32Array, columns: int, rows: int) -> void:
+	var source := values.duplicate()
+	var window: Array[float] = []
+	for row in rows:
+		for col in columns:
+			window.clear()
+			for dz in range(-1, 2):
+				for dx in range(-1, 2):
+					var nx := col + dx
+					var nz := row + dz
+					if nx < 0 or nx >= columns or nz < 0 or nz >= rows:
+						continue
+					window.append(source[nz * columns + nx])
+			window.sort()
+			values[row * columns + col] = window[window.size() / 2]
+
+func _smooth(values: PackedFloat32Array, columns: int, rows: int, passes: int) -> void:
+	for pass_index in passes:
+		var source := values.duplicate()
+		for row in rows:
+			for col in columns:
+				var total := 0.0
+				var samples := 0
+				for dz in range(-1, 2):
+					for dx in range(-1, 2):
+						var nx := col + dx
+						var nz := row + dz
+						if nx < 0 or nx >= columns or nz < 0 or nz >= rows:
+							continue
+						total += source[nz * columns + nx]
+						samples += 1
+				values[row * columns + col] = total / float(samples)
 
 func _build_rock_material() -> ShaderMaterial:
 	var material := ShaderMaterial.new()
@@ -195,37 +439,27 @@ func _build_rock_material() -> ShaderMaterial:
 ## La recherche est limitee a la partie centrale de la plaque : le point le plus
 ## haut d'un scan se trouve souvent sur un bord releve, ce qui donnerait
 ## l'impression d'un simple eclat de coin plutot que d'une fenetre sur la piece.
-func _carve_starting_hint(meshes: Array[MeshInstance3D]) -> void:
-	var bounds := _combined_aabb(_fossil_root, meshes)
-	var half := Vector2(bounds.size.x, bounds.size.z) * hint_search_area * 0.5
-	var centre := Vector2(bounds.get_center().x, bounds.get_center().z)
-	var search := Rect2(centre - half, half * 2.0)
+func _carve_starting_hint() -> void:
+	var columns := _slab.columns
+	var rows := _slab.rows
+	# Recherche limitee a la partie centrale : le point le plus haut d'un scan se
+	# trouve souvent sur un bord releve, ce qui donnerait l'impression d'un simple
+	# eclat de coin plutot que d'une fenetre sur la piece.
+	var margin_cols := int(float(columns) * (1.0 - hint_search_area) * 0.5)
+	var margin_rows := int(float(rows) * (1.0 - hint_search_area) * 0.5)
 
-	var highest := _highest_point_xz(meshes, search)
-	var cell := _slab.local_to_cell(_slab.to_local(Vector3(highest.x, 0.0, highest.y)))
-	_slab.carve_disc(cell, hint_radius_cells, hint_remaining_layers)
-
-func _highest_point_xz(meshes: Array[MeshInstance3D], search: Rect2) -> Vector2:
-	var best_y := -INF
-	var best := search.get_center()
-	for instance in meshes:
-		var to_scene := global_transform.affine_inverse() * instance.global_transform
-		for surface in instance.mesh.get_surface_count():
-			var arrays := instance.mesh.surface_get_arrays(surface)
-			if arrays.is_empty():
+	var best_height := -INF
+	var best_cell := Vector2i(columns / 2, rows / 2)
+	for row in range(margin_rows, rows - margin_rows):
+		for col in range(margin_cols, columns - margin_cols):
+			var cell := row * columns + col
+			if _specimen_mask[cell] == 0:
 				continue
-			var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
-			# Echantillonnage : inutile de parcourir 500 000 sommets pour situer un point.
-			var stride := maxi(1, vertices.size() / 8000)
-			var index := 0
-			while index < vertices.size():
-				var point := to_scene * vertices[index]
-				var flat := Vector2(point.x, point.z)
-				if point.y > best_y and search.has_point(flat):
-					best_y = point.y
-					best = flat
-				index += stride
-	return best
+			if _specimen_top[cell] > best_height:
+				best_height = _specimen_top[cell]
+				best_cell = Vector2i(col, row)
+
+	_slab.carve_disc(best_cell, hint_radius_cells, hint_remaining_layers)
 
 # --- Ambiance ---------------------------------------------------------------
 
@@ -259,17 +493,15 @@ func _build_lighting() -> void:
 	_fill_light.rotation_degrees = Vector3(-58.0, -140.0, 0.0)
 	_fill_light.shadow_enabled = false
 
-func _build_status_label() -> void:
-	var layer := CanvasLayer.new()
-	add_child(layer)
-	_status_label = Label.new()
-	_status_label.position = Vector2(16.0, 12.0)
-	_status_label.add_theme_color_override("font_color", Color(1.0, 0.94, 0.82))
-	layer.add_child(_status_label)
+func _connect_ui() -> void:
+	_ui.tool_requested.connect(_dig.select_tool)
+	_dig.tool_changed.connect(_ui.select_tool)
+	_dig.risk_changed.connect(_ui.set_risk)
+	_dig.stats_changed.connect(_ui.set_stats)
 
 func _set_status(message: String) -> void:
-	if _status_label != null:
-		_status_label.text = message
+	if _ui != null:
+		_ui.set_title(message)
 
 func _warn(message: String) -> void:
 	push_warning("[Lab] " + message)
