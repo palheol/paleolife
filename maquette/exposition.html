@@ -51,6 +51,7 @@
   #room-grid {
     display: grid;
     grid-template-columns: repeat(25, 1fr);
+    grid-template-rows: repeat(16, 1fr);
     gap: 2px;
     width: 100%;
     aspect-ratio: 25 / 16;
@@ -73,6 +74,12 @@
   .room-cell.banc { background: #d9c19a; }
   .room-cell.enclos-empty { background: #e3cfe6; border: 1px dashed #9a7ba3; }
   .room-cell.enclos-filled { background: #c9a8d1; }
+  .room-cell.accueil { background: #f0d9a0; }
+  .room-cell.entree { background: #bfe3c0; }
+  .room-cell.secours { background: #f3b8b0; }
+  .room-cell.labo-porte { background: #b8d4f0; }
+  .room-cell.parcours { background: #ffe9a8; border: 1px dotted #c9a83d; }
+  #room-grid { user-select: none; }
   .stats-grid { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.9em; }
   .stat { background: #fff8ec; border: 1px solid var(--wood); border-radius: 6px; padding: 6px 12px; }
   .stat.warn { border-color: var(--red); color: var(--red); font-weight: bold; }
@@ -138,13 +145,25 @@ window.addEventListener('error', function (e) {
 
 <div class="wrap">
   <div class="panel">
+    <p class="note" style="margin:0 0 6px; font-weight:bold;">Objets d'exposition</p>
     <div class="toolbar">
       <button class="tool-btn active" data-tool="mur">🧱 Mur</button>
       <button class="tool-btn" data-tool="vitrine">🦴 Vitrine</button>
       <button class="tool-btn" data-tool="enclos">🏛️ Enclos / diorama (2×2)</button>
       <button class="tool-btn" data-tool="banc">🪑 Banc</button>
     </div>
-    <p class="note">Clique sur une case vide pour poser l'objet sélectionné. Clique sur un objet déjà posé pour le retirer — aucune perte, tu peux réaménager librement.</p>
+    <p class="note" style="margin:12px 0 6px; font-weight:bold;">Accès &amp; signalétique</p>
+    <div class="toolbar">
+      <button class="tool-btn" data-tool="accueil">🛎️ Borne d'accueil</button>
+      <button class="tool-btn" data-tool="entree">🚪 Porte d'entrée</button>
+      <button class="tool-btn" data-tool="secours">🚨 Sortie de secours</button>
+      <button class="tool-btn" data-tool="labo-porte">🧪 Porte du labo</button>
+    </div>
+    <p class="note" style="margin:12px 0 6px; font-weight:bold;">Circulation</p>
+    <div class="toolbar">
+      <button class="tool-btn" data-tool="parcours">👣 Parcours visiteur</button>
+    </div>
+    <p class="note" style="margin-top:12px;">Clique (ou clique-glisse pour tracer une ligne) sur une case vide pour poser l'objet sélectionné. Clique sur un objet déjà posé pour le retirer — aucune perte, tu peux réaménager librement.</p>
   </div>
 
   <div class="panel">
@@ -190,6 +209,8 @@ let objects = []; // { id, type, cells: [index...], model: {name, bonus} | null 
 let nextObjectId = 1;
 let currentTool = 'mur';
 let pendingEnclosId = null; // enclos en attente d'un modèle depuis le catalogue
+let isPainting = false;
+let paintMode = null; // 'place' ou 'erase', déterminé par la première case du glissé
 
 document.querySelectorAll('.tool-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -205,10 +226,12 @@ for (let i = 0; i < COLS * ROWS; i++) {
   const cell = document.createElement('div');
   cell.className = 'room-cell';
   cell.dataset.index = i;
-  cell.addEventListener('click', () => onCellClick(i));
+  cell.addEventListener('mousedown', (e) => { e.preventDefault(); startPaint(i); });
+  cell.addEventListener('mouseenter', () => continuePaint(i));
   gridEl.appendChild(cell);
 }
 const cellEls = Array.from(gridEl.children);
+window.addEventListener('mouseup', () => { isPainting = false; paintMode = null; });
 
 function indexToColRow(i) {
   return { col: i % COLS, row: Math.floor(i / COLS) };
@@ -217,15 +240,29 @@ function colRowToIndex(col, row) {
   return row * COLS + col;
 }
 
-function onCellClick(i) {
+// Première case du clique-glisse : détermine si le glissé va poser ou effacer.
+function startPaint(i) {
+  isPainting = true;
   if (grid[i] !== null) {
     removeObjectAt(i);
+    paintMode = 'erase';
     return;
   }
+  paintMode = 'place';
   if (currentTool === 'enclos') {
     placeEnclos(i);
   } else {
     placeSingleCell(i, currentTool);
+  }
+}
+
+// Cases suivantes survolées pendant le glissé (bouton toujours enfoncé).
+function continuePaint(i) {
+  if (!isPainting || currentTool === 'enclos') return; // pas de glissé pour l'enclos 2×2
+  if (paintMode === 'erase') {
+    if (grid[i] !== null) removeObjectAt(i);
+  } else if (paintMode === 'place') {
+    if (grid[i] === null) placeSingleCell(i, currentTool);
   }
 }
 
@@ -289,6 +326,11 @@ function renderCell(i) {
     if (obj.model) { el.classList.add('enclos-filled'); if (obj.cells[0] === i) el.textContent = obj.model.icon; }
     else { el.classList.add('enclos-empty'); if (obj.cells[0] === i) el.textContent = '❔'; }
   }
+  else if (obj.type === 'accueil') { el.classList.add('accueil'); el.textContent = '🛎️'; }
+  else if (obj.type === 'entree') { el.classList.add('entree'); el.textContent = '🚪'; }
+  else if (obj.type === 'secours') { el.classList.add('secours'); el.textContent = '🚨'; }
+  else if (obj.type === 'labo-porte') { el.classList.add('labo-porte'); el.textContent = '🧪'; }
+  else if (obj.type === 'parcours') { el.classList.add('parcours'); el.textContent = '👣'; }
 }
 
 // --- Catalogue de modèles pour peupler un enclos/diorama ---
