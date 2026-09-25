@@ -13,6 +13,8 @@ Ton : chaleureux, lumineux, précis. Salles de musée boisées, lumière de fin 
 
 ## 2. Boucle de jeu
 
+**Ce n'est pas un pipeline imposé mais un hub à 4 actions librement choisies.** Le joueur accède à tout moment à : Fouiller le terrain, Dégager un fossile (labo), Rédiger un cartel/une publication (étude), Exposer et aménager son musée. Il peut enchaîner les quatre à la suite, ou n'avancer que sur une seule pendant toute une session — rien n'est forcé ni chronométré.
+
 ```
    ┌─────────┐     ┌────────┐     ┌────────┐     ┌────────────┐
    │ FOUILLE │ ──▶ │  LABO  │ ──▶ │ ÉTUDE  │ ──▶ │ EXPOSITION │
@@ -24,13 +26,15 @@ Ton : chaleureux, lumineux, précis. Salles de musée boisées, lumière de fin 
                   agrandissement) réinjectés dans la Fouille
 ```
 
-1. **Fouille** — le joueur entre dans une zone de fouille et en extrait des fossiles pris dans leur gangue.
-2. **Labo** — il dégage le fossile et recolle ce qui se fissure.
-3. **Étude** — un quiz scientifique débloque une page d'encyclopédie et fixe la richesse du cartel exposé (et rapporte de l'argent).
-4. **Exposition** — le fossile préparé rejoint une vitrine ou un diorama, dans une galerie composée par le joueur.
+Ce schéma reste la logique économique d'ensemble (ce qui alimente quoi), mais **pas un ordre obligatoire** :
+
+1. **Fouille** — le joueur entre dans une zone de fouille et en extrait des fossiles pris dans leur gangue. Ils rejoignent un **stock de blocs non préparés, quasi illimité** : rien n'est perdu faute de temps.
+2. **Labo** — depuis ce stock, le joueur **choisit lui-même quel fossile dégager**, dans l'ordre qu'il veut. Il dégage le fossile et recolle ce qui se fissure.
+3. **Étude** — depuis les fossiles dégagés, le joueur choisit lequel étudier. Un quiz scientifique débloque une page d'encyclopédie et fixe la richesse du cartel exposé (et rapporte de l'argent).
+4. **Exposition** — le fossile étudié rejoint une vitrine ou un diorama, dans une galerie composée par le joueur — ou patiente en **réserve** (quasi illimitée elle aussi) s'il n'y a pas encore de place.
 5. **Économie** — les visiteurs rapportent de l'argent, réinvesti dans l'activité en amont (outils, modèles de diorama, agrandissement).
 
-La boucle est conçue pour ne jamais forcer le joueur : chaque étape peut être quittée et reprise sans pénalité, et chaque fossile progresse à son rythme.
+La boucle est conçue pour ne jamais forcer le joueur : chaque étape peut être quittée et reprise sans pénalité, chaque fossile progresse à son rythme, et aucun stock (blocs en attente, réserve) n'a de limite qui forcerait à jeter quoi que ce soit.
 
 ## 3. Activités détaillées
 
@@ -38,7 +42,7 @@ La boucle est conçue pour ne jamais forcer le joueur : chaque étape peut être
 
 - **V1 : pas de gisement nommé.** Le joueur choisit une zone de fouille et **tombe directement dedans** — pas de carte de prospection ni d'indices de surface à ce stade.
 - Référence de gameplay : la mécanique s'inspire du **Souterrain de Pokémon Diamant/Perle** — une grille que l'on dégage progressivement, révélant des fossiles pris dans la roche, sans notion de chrono ni d'échec.
-- Il **creuse** dans la zone et **rapporte des fossiles** encore pris dans leur gangue vers le labo.
+- Il **creuse** dans la zone et **rapporte des fossiles** encore pris dans leur gangue vers un **stock de blocs non préparés** (quasi illimité — voir §2), sans obligation de les dégager tout de suite.
 - Pas de chrono, pas d'échec possible.
 - La gangue est **générée par le code** : une plaque creusée couche par couche en 2,5D — format cohérent avec les fossiles « en plaque » utilisés pour le prototypage (voir §5).
 
@@ -46,6 +50,7 @@ La boucle est conçue pour ne jamais forcer le joueur : chaque étape peut être
 
 Cœur tactile et relaxant du jeu.
 
+- Le joueur **choisit librement, dans son stock, quel bloc dégager** — aucun ordre imposé, il peut laisser des blocs en attente indéfiniment.
 - **Outils V1** : micro-percuteur (dégagement de la gangue), pinceau (nettoyage fin, dépoussiérage), colle (recollage des fissures — **la colle fait aussi office de consolidant**, pas d'outil séparé en V1).
 - Le dégagement se fait **couche par couche** sur la plaque 2,5D ramenée de la fouille.
 - **Jauge de risque en temps réel** : le risque de fissure dépend de l'**amplitude du geste** et de la **vitesse de dégagement** — plus les deux sont élevés (grand trait rapide au percuteur), plus le risque grimpe. Un geste lent et précis est le plus sûr. La jauge doit être visible en direct pendant le dégagement, pour que le joueur ajuste son geste sans surprise.
@@ -54,6 +59,9 @@ Cœur tactile et relaxant du jeu.
 
 ### 3.3 Étude
 
+*(aussi vue par le joueur comme « rédiger le cartel » ou « publier » un fossile — même activité, l'idée de publication scientifique pourrait devenir une couche de prestige à part entière hors V1, voir §7)*
+
+- Le joueur choisit, parmi les fossiles dégagés, lequel étudier — là aussi sans ordre imposé.
 - Un **quiz court** porte sur l'anatomie du fossile, sa famille, son âge géologique et son gisement d'origine.
 - Le quiz **débloque une page d'encyclopédie**, illustrée par le rendu du fossile tel que préparé par le joueur.
 - Le résultat du quiz **fixe le contenu du cartel** exposé, par paliers d'information :
@@ -67,6 +75,7 @@ Cœur tactile et relaxant du jeu.
 - **V1 : une grande salle rectangulaire d'environ 1000 m² virtuels**, que le joueur aménage librement : vitrines, enclos, murs, et **bancs pour les visiteurs** s'il le souhaite. Les modèles 3D d'aménagement seront fournis progressivement.
 - **Diorama** : au départ, aucun animal/modèle n'y figure. Le joueur doit **commander** des modèles (reconstitutions/statues) pour le peupler. **Plus le modèle commandé est lié thématiquement aux fossiles déjà exposés** (même espèce, même écosystème, même période), **plus le bonus économique est élevé**.
 - Le joueur **compose ses propres galeries** ; une présentation cohérente et variée (fossiles + squelettes + statues, bien organisés) est valorisée économiquement (voir §3.5).
+- **Parcours visiteur** : le joueur trace un chemin de circulation dans sa salle (calque dédié, voir la maquette `exposition.html`). Ce n'est pas cosmétique : **les visiteurs se déplacent réellement le long de ce parcours**, et l'ordre dans lequel ils rencontrent les pièces conditionne le bonus de cohérence (voir §3.5).
 - **Salle d'expositions temporaires** (V1 : jusqu'à 200 m² max) : thèmes ponctuels montés avec les fossiles disponibles, des moulages et des modèles du catalogue. Attire un pic de visiteurs puis se renouvelle. *Thème de la V1 encore à définir (voir §8).*
 
 ### 3.5 Économie
@@ -76,8 +85,9 @@ Cœur tactile et relaxant du jeu.
   - la **quantité** de fossiles/pièces exposées ;
   - la **qualité de l'organisation** des galeries (cohérence, rangement) ;
   - la **diversité** des types d'objets présentés (fossiles, squelettes *et* statues dans les dioramas) ;
+  - la **cohérence le long du parcours de visite** : plus l'enchaînement des pièces rencontrées suit une logique chronologique, thématique ou de classification **dans le sens de la visite** (et pas seulement en tas dans la salle), plus les visiteurs sont nombreux et plus ça rapporte ;
   - la qualité des réponses au quiz (voir §3.3).
-  - *La formule chiffrée exacte reste à concevoir au moment de l'implémentation (voir §8).*
+  - *La formule chiffrée exacte reste à concevoir au moment de l'implémentation (voir §8) ; la maquette `maquette.html` en propose un premier brouillon jetable à recalibrer.*
 - *Hors V1* : moulages échangés avec d'autres musées, événements (visites scolaires, prêts, chercheurs en résidence).
 
 **Dépenses**
@@ -96,8 +106,10 @@ Ces règles ne doivent jamais être trahies, quelle que soit l'activité :
 |---|---|
 | **Pas de chrono** | Aucune activité principale (fouille, labo, quiz) n'a de minuteur ni de pénalité liée à la vitesse. |
 | **Pas de perte définitive** | Un fossile fissuré au labo se recolle toujours ; malus de valeur scientifique, jamais de perte du spécimen ou de la progression. |
-| **Visiteurs simples** | Les visiteurs se promènent, regardent, commentent (avec humour, y compris des idées reçues à corriger via panneaux) ; aucun besoin à gérer (faim, satisfaction individuelle, etc.). |
+| **Stocks quasi illimités** | Blocs non préparés et réserve n'ont pas de plafond bloquant en V1 : rien à jeter faute de temps ou de place (voir §2, §6). |
+| **Visiteurs simples** | Les visiteurs suivent le parcours tracé par le joueur, regardent, commentent (avec humour, y compris des idées reçues à corriger via panneaux) ; aucun besoin à gérer (faim, satisfaction individuelle, etc.). |
 | **Quiz non bloquant** | Une erreur donne un indice et permet de réessayer ; le joueur n'est jamais empêché d'avancer par le quiz. |
+| **Aucune activité imposée** | Fouille, labo, étude et exposition sont 4 actions indépendantes choisies librement depuis le hub — jamais un pipeline obligatoire (voir §2). |
 
 ## 5. Contenu exact de la V1
 
@@ -129,17 +141,17 @@ Pour tester le pipeline fouille → labo → étude sans dépendre d'un gisement
 ## 6. Écrans et menus
 
 - **Écran titre** — Jouer / Continuer / Options / Quitter
-- **Menu principal du musée** (hub) — accès à Fouille, Labo, Exposition, Économie, Encyclopédie, Sauvegarde
+- **Menu principal du musée** (hub) — accès libre à Fouille, Labo, Étude, Exposition, Économie, Encyclopédie, Sauvegarde : 4 actions indépendantes, aucun ordre imposé (voir §2)
 - **Zone de fouille** — grille de dégagement façon « Souterrain » (pas de carte de prospection séparée en V1)
-- **Établi du labo** — dégagement du fossile (micro-percuteur, pinceau, colle), vue rapprochée de la plaque, jauge de risque en temps réel
-- **Inventaire des fossiles** — fossiles en gangue / en cours de préparation / prêts pour l'étude
+- **Établi du labo** — le joueur y choisit d'abord quel bloc de son stock dégager, puis dégagement du fossile (micro-percuteur, pinceau, colle), vue rapprochée de la plaque, jauge de risque en temps réel
+- **Inventaire des fossiles** — fossiles en gangue / en cours de préparation / prêts pour l'étude ; capacité quasi illimitée (aucun fossile trouvé n'est jamais perdu faute de temps)
 - **Écran de quiz** — questions anatomie / famille / âge / gisement, indices, résultat
 - **Page d'encyclopédie** — fiche du fossile, rendu personnalisé, cartel par paliers selon score du quiz
 - **Éditeur de galerie / musée** — aménagement libre de la salle (vitrines, enclos, murs, bancs)
 - **Catalogue de commande** — modèles à acheter pour peupler le diorama, avec indicateur de lien thématique
 - **Salle d'exposition temporaire** — sélection du thème, des pièces exposées (fossiles + moulages/modèles)
 - **Écran économie** — revenus (fréquentation liée à la collection), achats (outils, modèles), suivi de l'espace au sol restant
-- **Réserve** — pièces non exposées, en attente de place
+- **Réserve** — pièces étudiées mais non exposées, en attente de place ; capacité **quasi illimitée** elle aussi, pour ne jamais forcer à se débarrasser d'un fossile faute de place (règle cosy, voir §4)
 - **Paramètres** — langue (FR/EN), audio, affichage
 - **Sauvegarde / chargement**
 
@@ -152,6 +164,7 @@ Tout ce qui attend que la boucle labo → exposition soit validée amusante :
 - **Outils de labo avancés** : acide, loupe, outils de dégagement améliorés.
 - **Musée** : plusieurs ailes, dioramas classés par période sur plusieurs salles, catalogue élargi de statues grandeur nature, réaménagement et remplacement de salles, étages supplémentaires.
 - **Économie étendue** : moulages échangés avec d'autres musées, événements (visites scolaires, prêts, chercheurs), embauche de techniciens, formule chiffrée précise de fréquentation.
+- **Échange de fossiles entre joueurs** : système de codes générés par un joueur pour partager/donner un fossile qu'un autre joueur peut récupérer dans son propre musée (idée à creuser, mécanique et anti-abus à concevoir).
 - **Expositions temporaires** : thèmes variés, affiches, prêts d'autres musées, pics de fréquentation modélisés plus finement.
 - **Langues** additionnelles selon le succès commercial.
 - **Gangue en voxels** pour les os isolés (au-delà du format plaque 2,5D de la V1).
