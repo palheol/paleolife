@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>PALEO-LIFE — Maquette Exposition</title>
+<style>
+  :root {
+    --wood: #6b4a34;
+    --wood-dark: #4a3123;
+    --cream: #f3e6d0;
+    --ink: #2c2117;
+    --accent: #c97b3d;
+    --green: #6a9955;
+    --orange: #d99a3d;
+    --red: #c1543f;
+    --gold: #b8892f;
+    --floor: #e9d9ba;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Verdana, sans-serif;
+    background: linear-gradient(180deg, #f7ead2, #e7d3ad);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 12px 60px;
+  }
+  h1 { margin: 0 0 4px; font-size: 1.4em; }
+  .subtitle { margin: 0 0 20px; color: #6b5a44; font-size: 0.9em; }
+  .wrap { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 14px; }
+  .panel {
+    background: var(--cream);
+    border: 2px solid var(--wood);
+    border-radius: 10px;
+    padding: 16px;
+    width: 100%;
+  }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+  .tool-btn {
+    background: #fff8ec;
+    border: 2px solid var(--wood);
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--wood-dark); }
+  .note { font-size: 0.8em; color: #6b5a44; }
+  #room-grid {
+    display: grid;
+    grid-template-columns: repeat(25, 1fr);
+    gap: 2px;
+    width: 100%;
+    aspect-ratio: 25 / 16;
+    background: var(--wood-dark);
+    padding: 4px;
+    border-radius: 6px;
+  }
+  .room-cell {
+    background: var(--floor);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7em;
+    border-radius: 2px;
+  }
+  .room-cell:hover { filter: brightness(0.95); }
+  .room-cell.mur { background: var(--wood-dark); }
+  .room-cell.vitrine { background: #cfe0c9; }
+  .room-cell.banc { background: #d9c19a; }
+  .room-cell.enclos-empty { background: #e3cfe6; border: 1px dashed #9a7ba3; }
+  .room-cell.enclos-filled { background: #c9a8d1; }
+  .stats-grid { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.9em; }
+  .stat { background: #fff8ec; border: 1px solid var(--wood); border-radius: 6px; padding: 6px 12px; }
+  .stat.warn { border-color: var(--red); color: var(--red); font-weight: bold; }
+  .catalog-overlay {
+    display: none;
+    background: #fffaf0;
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+    padding: 14px;
+  }
+  .catalog-overlay.show { display: block; }
+  .catalog-options { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .catalog-btn {
+    background: #fff8ec;
+    border: 2px solid var(--wood);
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9em;
+  }
+  .catalog-btn:hover { background: #ffefd6; }
+  .locked-card {
+    background: #ece0c8;
+    border: 2px dashed #b3a488;
+    border-radius: 10px;
+    padding: 14px;
+    color: #6b5a44;
+    text-align: center;
+    font-size: 0.9em;
+  }
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff8ec;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 0.95; }
+</style>
+</head>
+<body>
+
+<div id="error-banner" style="display:none; position:fixed; top:0; left:0; right:0; background:#c1543f; color:#fff; padding:10px 16px; font-size:0.85em; z-index:999;"></div>
+<script>
+// Filet de sécurité : affiche l'erreur JS directement sur la page (pratique sans les outils développeur)
+window.addEventListener('error', function (e) {
+  const banner = document.getElementById('error-banner');
+  banner.textContent = 'Erreur JS : ' + e.message + ' (ligne ' + e.lineno + ')';
+  banner.style.display = 'block';
+});
+</script>
+
+<h1>PALEO-LIFE — Maquette : Exposition</h1>
+<p class="subtitle">Données factices — aménagement libre de la salle V1 (voir GDD §3.4)</p>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="toolbar">
+      <button class="tool-btn active" data-tool="mur">🧱 Mur</button>
+      <button class="tool-btn" data-tool="vitrine">🦴 Vitrine</button>
+      <button class="tool-btn" data-tool="enclos">🏛️ Enclos / diorama (2×2)</button>
+      <button class="tool-btn" data-tool="banc">🪑 Banc</button>
+    </div>
+    <p class="note">Clique sur une case vide pour poser l'objet sélectionné. Clique sur un objet déjà posé pour le retirer — aucune perte, tu peux réaménager librement.</p>
+  </div>
+
+  <div class="panel">
+    <div id="room-grid"></div>
+  </div>
+
+  <div class="panel catalog-overlay" id="catalog-overlay">
+    <strong>Peupler ce diorama : commande un modèle</strong>
+    <p class="note" style="margin:4px 0 0;">Plus le modèle est en lien avec les fossiles déjà exposés, plus le bonus est élevé (ici simulé avec des valeurs factices).</p>
+    <div class="catalog-options" id="catalog-options"></div>
+  </div>
+
+  <div class="panel">
+    <div class="stats-grid">
+      <div class="stat" id="stat-surface">Surface libre : 1000 / 1000 m²</div>
+      <div class="stat" id="stat-vitrines">Vitrines : 0</div>
+      <div class="stat" id="stat-enclos">Enclos peuplés : 0 / 0</div>
+      <div class="stat" id="stat-bancs">Bancs : 0</div>
+      <div class="stat" id="stat-affluence">👥 Fréquentation estimée : 0 visiteurs/jour</div>
+    </div>
+  </div>
+
+  <div class="locked-card">
+    🔒 Salle d'exposition temporaire (jusqu'à 200 m² max) — thème à définir ultérieurement (voir GDD §8). Prochaine maquette.
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ============================================================
+// PALEO-LIFE — maquette Exposition (aménagement libre de la salle V1)
+// Code minimal, données factices (règle "maquette d'abord")
+// ============================================================
+
+const COLS = 25, ROWS = 16;
+const TOTAL_AREA_M2 = 1000;
+const AREA_PER_CELL = TOTAL_AREA_M2 / (COLS * ROWS);
+
+// --- Grille : chaque case pointe vers l'id de l'objet qui l'occupe (ou null) ---
+const grid = new Array(COLS * ROWS).fill(null);
+let objects = []; // { id, type, cells: [index...], model: {name, bonus} | null }
+let nextObjectId = 1;
+let currentTool = 'mur';
+let pendingEnclosId = null; // enclos en attente d'un modèle depuis le catalogue
+
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+  });
+});
+
+// --- Construction de la grille ---
+const gridEl = document.getElementById('room-grid');
+for (let i = 0; i < COLS * ROWS; i++) {
+  const cell = document.createElement('div');
+  cell.className = 'room-cell';
+  cell.dataset.index = i;
+  cell.addEventListener('click', () => onCellClick(i));
+  gridEl.appendChild(cell);
+}
+const cellEls = Array.from(gridEl.children);
+
+function indexToColRow(i) {
+  return { col: i % COLS, row: Math.floor(i / COLS) };
+}
+function colRowToIndex(col, row) {
+  return row * COLS + col;
+}
+
+function onCellClick(i) {
+  if (grid[i] !== null) {
+    removeObjectAt(i);
+    return;
+  }
+  if (currentTool === 'enclos') {
+    placeEnclos(i);
+  } else {
+    placeSingleCell(i, currentTool);
+  }
+}
+
+function placeSingleCell(i, type) {
+  const id = nextObjectId++;
+  const obj = { id, type, cells: [i], model: null };
+  objects.push(obj);
+  grid[i] = id;
+  renderCell(i);
+  updateStats();
+}
+
+function placeEnclos(i) {
+  const { col, row } = indexToColRow(i);
+  if (col + 1 >= COLS || row + 1 >= ROWS) {
+    showToast("Pas assez de place ici (l'enclos occupe 2×2 cases).");
+    return;
+  }
+  const cells = [
+    colRowToIndex(col, row), colRowToIndex(col + 1, row),
+    colRowToIndex(col, row + 1), colRowToIndex(col + 1, row + 1)
+  ];
+  if (cells.some(c => grid[c] !== null)) {
+    showToast("Pas assez de place ici (l'enclos occupe 2×2 cases).");
+    return;
+  }
+  const id = nextObjectId++;
+  const obj = { id, type: 'enclos', cells, model: null };
+  objects.push(obj);
+  cells.forEach(c => grid[c] = id);
+  cells.forEach(renderCell);
+  updateStats();
+
+  // Ouvre le catalogue pour peupler ce nouvel enclos
+  openCatalog(id);
+}
+
+function removeObjectAt(i) {
+  const id = grid[i];
+  const obj = objects.find(o => o.id === id);
+  if (!obj) return;
+  obj.cells.forEach(c => { grid[c] = null; });
+  objects = objects.filter(o => o.id !== id);
+  obj.cells.forEach(renderCell);
+  if (pendingEnclosId === id) closeCatalog();
+  updateStats();
+}
+
+function renderCell(i) {
+  const el = cellEls[i];
+  const id = grid[i];
+  el.className = 'room-cell';
+  el.textContent = '';
+  if (id === null) return;
+  const obj = objects.find(o => o.id === id);
+  if (!obj) return;
+  if (obj.type === 'mur') { el.classList.add('mur'); }
+  else if (obj.type === 'vitrine') { el.classList.add('vitrine'); el.textContent = '🦴'; }
+  else if (obj.type === 'banc') { el.classList.add('banc'); el.textContent = '🪑'; }
+  else if (obj.type === 'enclos') {
+    if (obj.model) { el.classList.add('enclos-filled'); if (obj.cells[0] === i) el.textContent = obj.model.icon; }
+    else { el.classList.add('enclos-empty'); if (obj.cells[0] === i) el.textContent = '❔'; }
+  }
+}
+
+// --- Catalogue de modèles pour peupler un enclos/diorama ---
+const catalogChoices = [
+  { name: 'Réplique de mammifère primitif', icon: '🐴', bonus: 12, tag: 'Lien thématique fort avec les vitrines de mammifères' },
+  { name: 'Statue de crocodile fossile', icon: '🐊', bonus: 6, tag: 'Lien thématique moyen' },
+  { name: 'Modèle générique de poisson', icon: '🐟', bonus: 2, tag: 'Lien thématique faible' }
+];
+
+function openCatalog(enclosId) {
+  pendingEnclosId = enclosId;
+  const wrap = document.getElementById('catalog-options');
+  wrap.innerHTML = '';
+  catalogChoices.forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'catalog-btn';
+    btn.innerHTML = `${choice.icon} <strong>${choice.name}</strong><br><span class="note">${choice.tag} — bonus fréquentation : +${choice.bonus}</span>`;
+    btn.addEventListener('click', () => assignModel(choice));
+    wrap.appendChild(btn);
+  });
+  document.getElementById('catalog-overlay').classList.add('show');
+}
+
+function assignModel(choice) {
+  const obj = objects.find(o => o.id === pendingEnclosId);
+  if (!obj) return;
+  obj.model = choice;
+  obj.cells.forEach(renderCell);
+  closeCatalog();
+  updateStats();
+  showToast(`${choice.name} commandé pour le diorama.`);
+}
+
+function closeCatalog() {
+  pendingEnclosId = null;
+  document.getElementById('catalog-overlay').classList.remove('show');
+}
+
+// --- Statistiques et fréquentation estimée (formule provisoire, voir GDD §8) ---
+function updateStats() {
+  const occupied = grid.filter(v => v !== null).length;
+  const freeArea = Math.round((COLS * ROWS - occupied) * AREA_PER_CELL);
+  const freePct = Math.round((freeArea / TOTAL_AREA_M2) * 100);
+
+  const vitrineCount = objects.filter(o => o.type === 'vitrine').length;
+  const bancCount = objects.filter(o => o.type === 'banc').length;
+  const enclosObjs = objects.filter(o => o.type === 'enclos');
+  const enclosPeuples = enclosObjs.filter(o => o.model);
+
+  let affluence = 20 + vitrineCount * 3 + bancCount * 1;
+  enclosPeuples.forEach(o => affluence += o.model.bonus);
+
+  const typesPresent = new Set();
+  if (vitrineCount > 0) typesPresent.add('vitrine');
+  if (enclosPeuples.length > 0) typesPresent.add('enclos');
+  if (bancCount > 0) typesPresent.add('banc');
+  if (typesPresent.size >= 3) affluence += 15; // bonus de diversité (fossiles + squelettes/diorama + confort visiteurs)
+
+  const surfaceStat = document.getElementById('stat-surface');
+  surfaceStat.textContent = `Surface libre : ${freeArea} / ${TOTAL_AREA_M2} m²`;
+  surfaceStat.classList.toggle('warn', freePct < 15);
+  if (freePct < 15) {
+    surfaceStat.textContent += ' ⚠️ il ne reste plus beaucoup de place';
+  }
+
+  document.getElementById('stat-vitrines').textContent = `Vitrines : ${vitrineCount}`;
+  document.getElementById('stat-enclos').textContent = `Enclos peuplés : ${enclosPeuples.length} / ${enclosObjs.length}`;
+  document.getElementById('stat-bancs').textContent = `Bancs : ${bancCount}`;
+  document.getElementById('stat-affluence').textContent = `👥 Fréquentation estimée : ${affluence} visiteurs/jour`;
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+// --- Initialisation ---
+updateStats();
+</script>
+</body>
+</html>
