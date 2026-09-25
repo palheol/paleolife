@@ -18,5 +18,5 @@ size_label = "hauteur au garrot d'environ 30 cm (taille d'un petit chien)"
 size_cm = 30.0
 description = "Petit mammifère herbivore de la famille des Palaeotheriidae, cousine proche mais non ancêtre des chevaux actuels : cette lignée s'est éteinte sans descendance à la fin de l'Éocène. Vivait dans les sous-bois denses et humides d'Europe occidentale."
 specimen_status = "original"
-model_path = ""
+model_path = "res://3D models/primeval_dwarf_horse_nhmw-geo-199300350001.glb"
 icon_placeholder = "🐴"

@@ -18,5 +18,5 @@ size_label = "longueur totale estimée à 15-20 cm"
 size_cm = 17.0
 description = "Poisson à nageoires épineuses ; chez les espèces actuelles de ce genre, certaines épines sont venimeuses. Le calcaire de Bolca livre une faune ichtyologique marine tropicale remarquablement diversifiée. Identification limitée au genre (spécimen non déterminé à l'espèce)."
 specimen_status = "original"
-model_path = ""
+model_path = "res://3D models/scorpion_fish_nhmw-geo-198800010049.glb"
 icon_placeholder = "🐟"

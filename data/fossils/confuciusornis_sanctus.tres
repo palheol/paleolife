@@ -18,5 +18,5 @@ size_label = "envergure d'environ 70 cm"
 size_cm = 70.0
 description = "Un des plus anciens oiseaux connus à posséder un bec édenté et corné, contrairement à des contemporains comme Archaeopteryx qui avaient encore des dents. Ses capacités de vol exactes restent débattues."
 specimen_status = "original"
-model_path = ""
+model_path = "res://3D models/primitive_bird_fossil_nhmw-geo-199701120001.glb"
 icon_placeholder = "🐦"

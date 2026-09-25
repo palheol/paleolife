@@ -25,3 +25,12 @@ builds/
 *.pck
 *.exe
 *.app
+
+# Modeles 3D : hors depot pour deux raisons.
+# 1. Poids : certains scans depassent la limite de 100 Mo par fichier de GitHub.
+# 2. Licence : ce sont des scans de musee sous licence NON COMMERCIALE, reserves
+#    au prototypage interne (voir docs/GDD.md §5). Ils ne doivent pas etre
+#    redistribues via un depot public.
+3D models/
+captures/
+capture*.png

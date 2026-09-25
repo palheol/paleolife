@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RockProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/rock_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site_id = "solnhofen"
+display_name = "Calcaires lithographiques de Solnhofen"
+base_color = Color(0.89, 0.85, 0.73, 1)
+accent_color = Color(0.79, 0.73, 0.59, 1)
+deep_color = Color(0.69, 0.64, 0.53, 1)
+grain_scale = 130.0
+grain_strength = 0.1
+mottle_scale = 11.0
+mottle_strength = 0.3
+lamination_scale = 700.0
+lamination_strength = 0.12
+roughness = 0.8
+layer_count = 5
+layer_height = 0.004

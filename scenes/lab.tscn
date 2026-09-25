@@ -1,0 +1,24 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/lab_scene.gd" id="1_lab"]
+[ext_resource type="Script" path="res://scripts/rock_slab.gd" id="2_slab"]
+[ext_resource type="Script" path="res://scripts/orbit_camera.gd" id="3_cam"]
+[ext_resource type="Resource" path="res://data/fossils/confuciusornis_sanctus.tres" id="4_fossil"]
+[ext_resource type="Resource" path="res://data/rock_profiles/yixian.tres" id="5_rock"]
+
+[node name="Lab" type="Node3D"]
+script = ExtResource("1_lab")
+fossil = ExtResource("4_fossil")
+rock_profile = ExtResource("5_rock")
+
+[node name="RockSlab" type="MeshInstance3D" parent="."]
+script = ExtResource("2_slab")
+
+[node name="FossilRoot" type="Node3D" parent="."]
+
+[node name="OrbitCamera" type="Camera3D" parent="."]
+script = ExtResource("3_cam")
+
+[node name="KeyLight" type="DirectionalLight3D" parent="."]
+
+[node name="FillLight" type="DirectionalLight3D" parent="."]

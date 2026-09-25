@@ -18,5 +18,5 @@ size_label = "taille d'un corbeau, envergure d'environ 50 cm"
 size_cm = 50.0
 description = "Fossile emblématique illustrant la transition entre dinosaures théropodes non-aviens et oiseaux : il possédait encore des dents et une longue queue osseuse, mais aussi des plumes bien développées."
 specimen_status = "original"
-model_path = ""
+model_path = "res://3D models/berlin_archaeopteryx_decimated.glb"
 icon_placeholder = "🦖"

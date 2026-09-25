@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="RockProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/rock_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site_id = "yixian"
+display_name = "Schistes lacustres de Yixian (Jehol)"
+base_color = Color(0.82, 0.78, 0.69, 1)
+accent_color = Color(0.66, 0.62, 0.54, 1)
+deep_color = Color(0.5, 0.47, 0.42, 1)
+grain_scale = 150.0
+grain_strength = 0.14
+mottle_scale = 9.0
+mottle_strength = 0.28
+lamination_scale = 1600.0
+lamination_strength = 0.3
+roughness = 0.88
+layer_count = 5
+layer_height = 0.004

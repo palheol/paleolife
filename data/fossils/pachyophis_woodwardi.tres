@@ -18,5 +18,5 @@ size_label = "longueur totale estimée à environ 1 mètre"
 size_cm = 100.0
 description = "Serpent marin primitif conservant des vestiges de pattes postérieures, souvent cité dans le débat scientifique sur l'origine aquatique ou terrestre des serpents. Position familiale encore discutée (family laissé vide)."
 specimen_status = "original"
-model_path = ""
+model_path = "res://3D models/primitive_snake_fossil_nhmw-geo-191200010008.glb"
 icon_placeholder = "🐍"
