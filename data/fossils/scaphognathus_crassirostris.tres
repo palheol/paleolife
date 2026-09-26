@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "scaphognathus_crassirostris"
+genus = "Scaphognathus"
+species = "crassirostris"
+author_year = "(Goldfuss, 1831)"
+taxon_class = "Reptilia"
+taxon_order = "Pterosauria"
+family = "Rhamphorhynchidae"
+site_id = "solnhofen"
+age_label = "Jurassique supérieur (environ 150 millions d'années)"
+age_ma = 150.0
+size_label = "envergure d'environ 90 cm"
+size_cm = 90.0
+description = "Ptérosaure à longue queue, au museau court et haut — d'où son nom d'espèce, « à bec épais » — portant des dents espacées et inclinées vers l'avant. Espèce rare, connue par un petit nombre de spécimens, tous issus des calcaires de Solnhofen."
+specimen_status = "réplique"
+model_path = "res://3D models/Scaphognathus.obj"
+icon_placeholder = "🦴"

@@ -51,6 +51,9 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 ## Les scans de musee sont photographies sous un eclairage de studio, deja cuit
 ## dans la texture. Sans correction, la piece degagee part en blanc pur.
 @export_range(0.1, 1.5, 0.05) var specimen_brightness: float = 0.5
+## Teinte appliquee aux modeles sans materiau (un .obj converti, par exemple),
+## qui seraient sinon rendus en blanc pur.
+@export var untextured_specimen_color: Color = Color(0.34, 0.31, 0.26)
 
 @onready var _slab: RockSlab = $RockSlab
 @onready var _fossil_root: Node3D = $FossilRoot
@@ -116,18 +119,29 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 			% fossil.model_path)
 		return empty
 
-	var packed := load(fossil.model_path) as PackedScene
-	if packed == null:
-		_warn("Le fichier %s n'a pas pu etre charge comme scene." % fossil.model_path)
+	# Godot livre un .glb sous forme de scene, mais un .obj sous forme de simple
+	# maillage : on accepte les deux pour ne pas dependre du format d'origine.
+	var resource := load(fossil.model_path)
+	var model: Node3D = null
+	if resource is PackedScene:
+		model = (resource as PackedScene).instantiate() as Node3D
+	elif resource is Mesh:
+		var single := MeshInstance3D.new()
+		single.mesh = resource
+		model = single
+	if model == null:
+		_warn("Le fichier %s n'est ni une scene ni un maillage exploitable."
+			% fossil.model_path)
 		return empty
-
-	var model := packed.instantiate() as Node3D
 	_fossil_root.add_child(model)
 
 	var meshes := _collect_meshes(model)
 	if meshes.is_empty():
 		_warn("Aucun maillage exploitable dans %s." % fossil.model_path)
 		return empty
+
+	for instance in meshes:
+		_ensure_normals(instance)
 
 	if level_specimen:
 		_level_specimen(model, meshes)
@@ -146,15 +160,42 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 	_tone_down_specimen(meshes)
 	return meshes
 
+## Certains formats arrivent sans normales (un .obj converti depuis un fichier
+## d'impression 3D, par exemple) : le modele est alors rendu uniformement plat.
+## On les recalcule plutot que d'imposer un format d'entree.
+func _ensure_normals(instance: MeshInstance3D) -> void:
+	var mesh := instance.mesh
+	if mesh == null:
+		return
+	var missing := false
+	for surface in mesh.get_surface_count():
+		if (mesh.surface_get_format(surface) & Mesh.ARRAY_FORMAT_NORMAL) == 0:
+			missing = true
+	if not missing:
+		return
+
+	var rebuilt := ArrayMesh.new()
+	for surface in mesh.get_surface_count():
+		var builder := SurfaceTool.new()
+		builder.create_from(mesh, surface)
+		builder.generate_normals()
+		rebuilt.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, builder.commit_to_arrays())
+	instance.mesh = rebuilt
+
 ## Assombrit le scan sans toucher a la roche, via des surcharges de materiau
 ## (l'original importe reste intact).
 func _tone_down_specimen(meshes: Array[MeshInstance3D]) -> void:
-	if is_equal_approx(specimen_brightness, 1.0):
-		return
 	for instance in meshes:
 		for surface in instance.mesh.get_surface_count():
 			var source := instance.mesh.surface_get_material(surface) as BaseMaterial3D
 			if source == null:
+				# Modele sans materiau : il serait rendu en blanc pur.
+				var plain := StandardMaterial3D.new()
+				plain.albedo_color = untextured_specimen_color
+				plain.roughness = 0.75
+				instance.set_surface_override_material(surface, plain)
+				continue
+			if is_equal_approx(specimen_brightness, 1.0):
 				continue
 			var copy := source.duplicate() as BaseMaterial3D
 			copy.albedo_color = Color(
@@ -242,7 +283,11 @@ func _sample_points(root: Node3D, meshes: Array[MeshInstance3D], wanted: int) ->
 ## contient un fragment exclu. Les exclus sont masques plutot que supprimes.
 func _collect_meshes(root: Node3D) -> Array[MeshInstance3D]:
 	var kept: Array[MeshInstance3D] = []
-	for node in _descendants(root):
+	# La racine compte elle aussi : un .obj se charge en un unique maillage, sans
+	# hierarchie, contrairement a un .glb.
+	var candidates: Array[Node] = [root]
+	candidates.append_array(_descendants(root))
+	for node in candidates:
 		var instance := node as MeshInstance3D
 		if instance == null or instance.mesh == null:
 			continue
