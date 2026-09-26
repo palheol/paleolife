@@ -32,7 +32,9 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 ## Profondeur maximale, en metres, sur laquelle la gangue suit le relief. Les
 ## scans incluent souvent les flancs et le support du bloc : sans cette limite,
 ## la roche plongerait de 20 cm la ou la face utile s'arrete.
-@export var max_drape_depth_m: float = 0.012
+## 0 = deduite du relief de la piece, ce qui permet de passer d'une plaque
+## (quelques millimetres) a un os en volume (plusieurs centimetres) sans reglage.
+@export var max_drape_depth_m: float = 0.0
 
 @export_group("Indice de depart")
 ## Petite zone deja erodee qui laisse deviner ou commencer (comme un fossile
@@ -152,7 +154,12 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 		_warn("Le modele a une emprise horizontale nulle.")
 		return empty
 
-	var scale_factor := specimen_size_m / largest
+	# La taille propre a la piece prime sur celle de la scene : une plaque et un
+	# crane isole n'ont pas du tout les memes dimensions.
+	var wanted := specimen_size_m
+	if fossil.specimen_size_cm > 0.0:
+		wanted = fossil.specimen_size_cm * 0.01
+	var scale_factor := wanted / largest
 	model.scale = Vector3.ONE * scale_factor
 
 	var scaled := AABB(bounds.position * scale_factor, bounds.size * scale_factor)
@@ -389,6 +396,7 @@ func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
 	# vraiment du specimen. Se caler sur le maximum du scan serait trompeur, car
 	# ce maximum est souvent un bord releve du bloc, loin de la face travaillee.
 	var face_level := _median_specimen_level()
+	var depth := _drape_depth(face_level)
 
 	# Tout ce qui s'ecarte trop de ce niveau est ramene dans une fourchette : en
 	# dessous ce sont les flancs du bloc, au-dessus des asperites isolees.
@@ -398,8 +406,7 @@ func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
 		if _specimen_mask[cell] == 0:
 			surface[cell] = face_level
 			continue
-		surface[cell] = clampf(_specimen_top[cell],
-			face_level - max_drape_depth_m, face_level + max_drape_depth_m)
+		surface[cell] = clampf(_specimen_top[cell], face_level - depth, face_level + depth)
 
 	# Median puis moyenne : le median ecarte les sommets isoles dus au bruit de
 	# photogrammetrie (une moyenne, elle, les etale au lieu de les enlever), et le
@@ -419,6 +426,23 @@ func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
 		# 0 = plaque plate au niveau moyen de la face, 1 = la roche epouse le relief.
 		bases[cell] = lerpf(face_level, surface[cell], relief_follow) + clearance_m
 	return bases
+
+## Sur quelle hauteur la gangue suit le relief. Mesuree sur la piece elle-meme :
+## une plaque de Solnhofen ne s'ecarte que de quelques millimetres de son plan
+## moyen, un crane de plusieurs centimetres. On prend l'ecart entre la mediane et
+## le 5e centile, assez robuste pour ignorer les trous du scan.
+func _drape_depth(face_level: float) -> float:
+	if max_drape_depth_m > 0.0:
+		return max_drape_depth_m
+	var heights: Array[float] = []
+	for cell in _specimen_top.size():
+		if _specimen_mask[cell] != 0:
+			heights.append(_specimen_top[cell])
+	if heights.size() < 16:
+		return 0.012
+	heights.sort()
+	var low: float = heights[int(float(heights.size()) * 0.05)]
+	return clampf((face_level - low) * 1.6, 0.008, 0.12)
 
 ## Hauteur representative de la face travaillee : mediane des cellules qui
 ## recouvrent reellement le specimen, insensible aux bords releves du bloc.

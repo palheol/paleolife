@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="SiteData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/site_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ischigualasto"
+site_name = "Vallée de la Lune (Ischigualasto)"
+region = "Province de San Juan, Argentine"
+formation = "Formation d'Ischigualasto"
+era_label = "Trias supérieur (environ 231 millions d'années)"
+age_ma = 231.0
+description = "Succession de grès et d'argilites déposés par des rivières, entrecoupée de cendres volcaniques qui permettent une datation précise. Le gisement a livré certains des plus anciens dinosaures connus. Contrairement aux gisements en plaque, les ossements y sont trouvés en volume, dégagés de tous côtés."
+fossil_ids = PackedStringArray("eoraptor_lunensis")

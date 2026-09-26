@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="FossilData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/fossil_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "eoraptor_lunensis"
+genus = "Eoraptor"
+species = "lunensis"
+author_year = "Sereno, Forster, Rogers & Monetta, 1993"
+taxon_class = "Reptilia"
+taxon_order = "Saurischia"
+family = ""
+site_id = "ischigualasto"
+age_label = "Trias supérieur (environ 231 millions d'années)"
+age_ma = 231.0
+size_label = "environ 1 m de long ; crâne d'une douzaine de centimètres"
+size_cm = 100.0
+specimen_size_cm = 12.0
+description = "L'un des plus anciens dinosaures connus, petit et bipède. Sa position exacte reste débattue : longtemps tenu pour un théropode basal, il est aujourd'hui souvent rangé parmi les tout premiers sauropodomorphes — d'où l'absence de famille sur ce cartel. Pièce dégagée en volume, et non sur plaque."
+specimen_status = "réplique"
+model_path = "res://3D models/Eoraptor_skull.obj"
+icon_placeholder = "🦖"

@@ -21,7 +21,11 @@ class_name FossilData
 
 @export_group("Description")
 @export var size_label: String = "" # ex. "envergure d'environ 70 cm" (la dimension mesuree varie selon l'animal)
-@export var size_cm: float = 0.0
+@export var size_cm: float = 0.0 # taille de l'ANIMAL vivant
+## Taille reelle de la PIECE sur l'etabli, en centimetres : une plaque de
+## Solnhofen et un crane isole n'ont rien de comparable. 0 = valeur par defaut
+## de la scene.
+@export var specimen_size_cm: float = 0.0
 @export_multiline var description: String = ""
 # Statut du specimen expose ; affichage sur le cartel laisse au choix du joueur (voir GDD §3.4).
 @export_enum("original", "moulage", "réplique") var specimen_status: String = "original"
