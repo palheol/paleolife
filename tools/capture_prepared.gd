@@ -6,7 +6,9 @@ extends SceneTree
 ## poussiere), a droite on finit au pinceau. Deux fissures sont ajoutees, dont
 ## une recollee, pour controler leur lisibilite.
 ##
-## Usage : godot --path . --script res://tools/capture_prepared.gd -- <sortie.png>
+## Usage : godot --path . --script res://tools/capture_prepared.gd -- <sortie.png> [outil]
+## outil : 0 = percuteur, 1 = pinceau, 2 = colle. La souris est amenee au centre
+## pour que le curseur 3D de l'outil soit visible sur la capture.
 
 var _frames := 0
 var _lab: Node
@@ -69,3 +71,11 @@ func _prepare() -> void:
 		var last: Vector3 = dig._crack_positions[dig._crack_positions.size() - 1]
 		dig.select_tool(DigController.Tool.COLLE)
 		dig._try_glue(camera.unproject_position(last))
+
+	# Outil demande, et souris au centre pour que le curseur 3D soit visible.
+	var args := OS.get_cmdline_user_args()
+	var wanted := 0
+	if args.size() > 1:
+		wanted = int(args[1])
+	dig.select_tool(wanted as DigController.Tool)
+	Input.warp_mouse(centre)

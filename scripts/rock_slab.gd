@@ -14,6 +14,10 @@ signal rebuilt
 
 const VERTS_PER_CELL: int = 30
 
+## Decalage aleatoire des noeuds de la grille, en fraction d'une cellule.
+## Sans lui, la roche cassee ressemble a de gros pixels carres.
+@export_range(0.0, 0.45, 0.01) var corner_jitter: float = 0.34
+
 var profile: RockProfile
 var columns: int = 1
 var rows: int = 1
@@ -222,10 +226,13 @@ func _write_cell(col: int, row: int) -> void:
 	var height := _layers[row * columns + col]
 	var max_layers := float(maxi(1, profile.layer_count))
 
-	var x0 := float(col) * cell_size - size_x() * 0.5
-	var z0 := float(row) * cell_size - size_z() * 0.5
-	var x1 := x0 + cell_size
-	var z1 := z0 + cell_size
+	# Les quatre coins sont decales par un bruit propre a chaque noeud de la
+	# grille : la roche cassee n'a pas de bords rectilignes. Deux cellules
+	# voisines lisent le meme coin, donc le maillage reste soude.
+	var c00 := _corner(col, row)
+	var c01 := _corner(col, row + 1)
+	var c11 := _corner(col + 1, row + 1)
+	var c10 := _corner(col + 1, row)
 	var y := cell_top(col, row)
 	var shade := _shade_for(height, max_layers)
 
@@ -233,18 +240,33 @@ func _write_cell(col: int, row: int) -> void:
 	# laisse apparaitre le specimen en dessous.
 	if height > 0:
 		_write_quad(slot,
-			Vector3(x0, y, z0), Vector3(x0, y, z1), Vector3(x1, y, z1), Vector3(x1, y, z0),
+			Vector3(c00.x, y, c00.y), Vector3(c01.x, y, c01.y),
+			Vector3(c11.x, y, c11.y), Vector3(c10.x, y, c10.y),
 			Vector3.UP, shade, shade, shade, shade)
 	else:
 		_write_degenerate(slot)
 
-	_write_wall(slot + 6, col, row, y, shade, -1, 0, x0, z0, x0, z1, Vector3.LEFT, max_layers)
-	_write_wall(slot + 12, col, row, y, shade, 1, 0, x1, z1, x1, z0, Vector3.RIGHT, max_layers)
-	_write_wall(slot + 18, col, row, y, shade, 0, -1, x1, z0, x0, z0, Vector3.FORWARD, max_layers)
-	_write_wall(slot + 24, col, row, y, shade, 0, 1, x0, z1, x1, z1, Vector3.BACK, max_layers)
+	_write_wall(slot + 6, col, row, y, shade, -1, 0, c00, c01, Vector3.LEFT, max_layers)
+	_write_wall(slot + 12, col, row, y, shade, 1, 0, c11, c10, Vector3.RIGHT, max_layers)
+	_write_wall(slot + 18, col, row, y, shade, 0, -1, c10, c00, Vector3.FORWARD, max_layers)
+	_write_wall(slot + 24, col, row, y, shade, 0, 1, c01, c11, Vector3.BACK, max_layers)
+
+## Position d'un noeud de la grille, decalee par un bruit stable.
+func _corner(col: int, row: int) -> Vector2:
+	var jitter := cell_size * corner_jitter
+	return Vector2(
+		float(col) * cell_size - size_x() * 0.5 + _corner_noise(col, row, 1) * jitter,
+		float(row) * cell_size - size_z() * 0.5 + _corner_noise(col, row, 2) * jitter)
+
+## Bruit deterministe dans [-1, 1], fonction du seul noeud de grille.
+func _corner_noise(col: int, row: int, salt: int) -> float:
+	var value := col * 73856093 + row * 19349663 + salt * 83492791
+	value = (value ^ (value >> 13)) * 1274126177
+	value = value ^ (value >> 16)
+	return float(value & 0xffff) / 32767.5 - 1.0
 
 func _write_wall(slot: int, col: int, row: int, y_top: float, c_top: Color, dx: int, dz: int,
-		ax: float, az: float, bx: float, bz: float, normal: Vector3, max_layers: float) -> void:
+		a: Vector2, b: Vector2, normal: Vector3, max_layers: float) -> void:
 	var neighbour_top := cell_top(col + dx, row + dz)
 	if neighbour_top >= y_top:
 		_write_degenerate(slot)
@@ -253,8 +275,8 @@ func _write_wall(slot: int, col: int, row: int, y_top: float, c_top: Color, dx: 
 	var neighbour_layers := get_layers_at(col + dx, row + dz)
 	var c_bottom := _shade_for(neighbour_layers, max_layers)
 	_write_quad(slot,
-		Vector3(ax, neighbour_top, az), Vector3(ax, y_top, az),
-		Vector3(bx, y_top, bz), Vector3(bx, neighbour_top, bz),
+		Vector3(a.x, neighbour_top, a.y), Vector3(a.x, y_top, a.y),
+		Vector3(b.x, y_top, b.y), Vector3(b.x, neighbour_top, b.y),
 		normal, c_bottom, c_top, c_top, c_bottom)
 
 func _write_bottom() -> void:

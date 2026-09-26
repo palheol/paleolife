@@ -60,6 +60,7 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 @onready var _cracks: Node3D = $Cracks
 @onready var _dig: DigController = $DigController
 @onready var _ui: LabUI = $LabUI
+@onready var _tool_cursor: ToolCursor = $ToolCursor
 
 ## Altitude du specimen sous chaque cellule de la grille, et masque des cellules
 ## qui le recouvrent reellement (le reste n'est que de la marge).
@@ -92,6 +93,8 @@ func _ready() -> void:
 		maxf(_slab.size_x(), _slab.size_z()))
 
 	_dig.setup(_slab, _camera, _cracks, _specimen_mask)
+	_tool_cursor.setup(_slab, _camera)
+	_tool_cursor.show_tool(_dig.current_tool)
 
 	var title := rock_profile.display_name
 	if fossil != null:
@@ -499,6 +502,7 @@ func _connect_ui() -> void:
 	_dig.tool_changed.connect(_ui.select_tool)
 	_dig.risk_changed.connect(_ui.set_risk)
 	_dig.stats_changed.connect(_ui.set_stats)
+	_dig.tool_changed.connect(_tool_cursor.show_tool)
 
 func _set_status(message: String) -> void:
 	if _ui != null:

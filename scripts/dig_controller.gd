@@ -125,7 +125,11 @@ func _apply_at(screen_position: Vector2) -> void:
 
 	for row in range(cell.y - radius, cell.y + radius + 1):
 		for col in range(cell.x - radius, cell.x + radius + 1):
-			if Vector2(col - cell.x, row - cell.y).length() > float(radius):
+			# Contour irregulier plutot qu'un disque parfait : la roche part par
+			# eclats. Le bruit depend de la cellule, donc repasser au meme endroit
+			# redonne la meme frontiere au lieu de la faire scintiller.
+			var ragged := float(radius) * (0.78 + 0.4 * _cell_noise(col, row))
+			if Vector2(col - cell.x, row - cell.y).length() > ragged:
 				continue
 			var layers := _slab.get_layers_at(col, row)
 			if current_tool == Tool.PERCUTEUR:
@@ -142,6 +146,13 @@ func _apply_at(screen_position: Vector2) -> void:
 		_last_dig_position = result["position"]
 		_has_dug = true
 		_emit_stats()
+
+## Bruit stable dans [0, 1], propre a une cellule de la grille.
+func _cell_noise(col: int, row: int) -> float:
+	var value := col * 374761393 + row * 668265263
+	value = (value ^ (value >> 13)) * 1274126177
+	value = value ^ (value >> 16)
+	return float(value & 0xffff) / 65535.0
 
 func _raycast(screen_position: Vector2) -> Dictionary:
 	var from := _camera.project_ray_origin(screen_position)

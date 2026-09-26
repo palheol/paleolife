@@ -22,6 +22,10 @@ var _tool_buttons: Dictionary = {}
 func _ready() -> void:
 	var root := MarginContainer.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Le conteneur couvre tout l'ecran : sans cela il capterait le survol de la
+	# souris partout, ce qui masquerait le curseur 3D de l'outil et priverait la
+	# scene des clics. Seuls les boutons restent sensibles.
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_theme_constant_override("margin_left", 18)
 	root.add_theme_constant_override("margin_top", 14)
 	root.add_theme_constant_override("margin_right", 18)
@@ -29,6 +33,7 @@ func _ready() -> void:
 	add_child(root)
 
 	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_theme_constant_override("separation", 10)
 	root.add_child(column)
 
@@ -53,6 +58,7 @@ func _ready() -> void:
 
 func _build_toolbar() -> Control:
 	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 8)
 	_add_tool_button(row, DigController.Tool.PERCUTEUR, "Micro-percuteur",
 		"Degrossit la gangue. Geste ample et rapide = risque de fissure.")
@@ -75,6 +81,7 @@ func _add_tool_button(row: HBoxContainer, tool: DigController.Tool, label: Strin
 
 func _build_risk_gauge() -> Control:
 	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_theme_constant_override("separation", 3)
 
 	var caption := Label.new()
@@ -83,6 +90,7 @@ func _build_risk_gauge() -> Control:
 	column.add_child(caption)
 
 	_risk_bar = PanelContainer.new()
+	_risk_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_risk_bar.custom_minimum_size = Vector2(280, 14)
 	# Sans cela le conteneur s'etire sur toute la largeur de la fenetre, et le
 	# remplissage n'atteint jamais le bout de la barre.
@@ -93,6 +101,7 @@ func _build_risk_gauge() -> Control:
 	_risk_bar.add_theme_stylebox_override("panel", background)
 
 	_risk_track = Control.new()
+	_risk_track.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_risk_track.clip_contents = true
 	_risk_track.resized.connect(_update_risk_fill)
 	_risk_bar.add_child(_risk_track)
