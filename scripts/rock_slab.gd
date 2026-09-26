@@ -85,7 +85,14 @@ func size_z() -> float:
 
 ## Epaisseur totale de gangue au-dessus du specimen.
 func surface_thickness() -> float:
-	return float(profile.layer_count) * profile.layer_height
+	return height_of(profile.layer_count)
+
+## Hauteur cumulee de N couches. La derniere — le voile de poussiere — est bien
+## plus mince que les autres : c'est une pellicule qu'on balaie, pas une dalle.
+func height_of(layers: int) -> float:
+	if layers <= 0:
+		return 0.0
+	return profile.layer_height * (profile.dust_thickness_ratio + float(layers - 1))
 
 ## Altitude du point le plus haut de la plaque intacte.
 func max_top() -> float:
@@ -96,7 +103,7 @@ func cell_top(col: int, row: int) -> float:
 	if not is_inside(col, row):
 		return _floor_level
 	var index := row * columns + col
-	return _bases[index] + float(_layers[index]) * profile.layer_height
+	return _bases[index] + height_of(_layers[index])
 
 func get_layers_at(col: int, row: int) -> int:
 	# Hors grille : 0, ce qui fait naturellement apparaitre les flancs du bloc.

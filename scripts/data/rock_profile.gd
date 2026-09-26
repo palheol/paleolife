@@ -34,3 +34,7 @@ class_name RockProfile
 @export var layer_count: int = 5
 ## Epaisseur d'une couche, en metres.
 @export var layer_height: float = 0.004
+## Epaisseur de la derniere couche — le voile de poussiere — en fraction d'une
+## couche normale. Elle doit rester tres mince : sinon on a l'impression de
+## retirer une enieme dalle de roche, au lieu de balayer une pellicule.
+@export_range(0.05, 1.0, 0.01) var dust_thickness_ratio: float = 0.16

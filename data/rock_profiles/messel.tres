@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="RockProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/rock_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+site_id = "messel"
+display_name = "Schistes bitumineux de Messel"
+base_color = Color(0.34, 0.3, 0.25, 1)
+accent_color = Color(0.24, 0.21, 0.18, 1)
+deep_color = Color(0.16, 0.14, 0.12, 1)
+grain_scale = 200.0
+grain_strength = 0.12
+mottle_scale = 11.0
+mottle_strength = 0.24
+lamination_scale = 2600.0
+lamination_strength = 0.4
+roughness = 0.7
+dust_opacity = 0.46
+dust_thickness_ratio = 0.16
+layer_count = 2
+layer_height = 0.004

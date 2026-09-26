@@ -60,6 +60,17 @@ func setup(slab: RockSlab, camera: Camera3D, cracks_root: Node3D, mask: PackedBy
 	_mask = mask
 	_emit_stats()
 
+## Remet le poste a zero pour une nouvelle piece : l'usure et les fissures
+## appartiennent au specimen precedent, pas au suivant.
+func reset() -> void:
+	risk = 0.0
+	science_value = 100.0
+	_crack_positions = PackedVector3Array()
+	_crack_nodes.clear()
+	_has_dug = false
+	_pressing = false
+	risk_changed.emit(risk)
+
 func select_tool(tool: Tool) -> void:
 	current_tool = tool
 	tool_changed.emit(tool)

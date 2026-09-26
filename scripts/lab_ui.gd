@@ -5,6 +5,7 @@ class_name LabUI
 ## Construite par code pour garder la scene lisible et facile a faire evoluer.
 
 signal tool_requested(tool: DigController.Tool)
+signal fossil_requested(fossil: FossilData)
 
 const SAFE_COLOR := Color(0.42, 0.60, 0.34)
 const WARNING_COLOR := Color(0.85, 0.60, 0.24)
@@ -18,6 +19,9 @@ var _risk_ratio: float = 0.0
 var _stats: Label
 var _hint: Label
 var _tool_buttons: Dictionary = {}
+var _collection_button: Button
+var _collection_panel: PanelContainer
+var _collection_list: VBoxContainer
 
 func _ready() -> void:
 	var root := MarginContainer.new()
@@ -52,6 +56,8 @@ func _ready() -> void:
 	_hint.text = "Clic gauche : outil actif · Clic droit glisse : pivoter · Molette : zoomer"
 	_hint.add_theme_color_override("font_color", Color(0.72, 0.68, 0.60))
 	column.add_child(_hint)
+
+	column.add_child(_build_collection_panel())
 
 	select_tool(DigController.Tool.PERCUTEUR)
 	set_risk(0.0)
@@ -114,6 +120,68 @@ func _build_risk_gauge() -> Control:
 
 	column.add_child(_risk_bar)
 	return column
+
+## Collection : un tiroir que l'on ouvre pour choisir la piece suivante. On y
+## lit la provenance du bloc, jamais l'espece — c'est l'etude qui la revele.
+func _build_collection_panel() -> Control:
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 6)
+
+	_collection_button = Button.new()
+	_collection_button.text = "▸ Collection"
+	_collection_button.focus_mode = Control.FOCUS_NONE
+	_collection_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_collection_button.pressed.connect(_toggle_collection)
+	column.add_child(_collection_button)
+
+	_collection_panel = PanelContainer.new()
+	_collection_panel.visible = false
+	_collection_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(0.13, 0.11, 0.09, 0.92)
+	background.set_corner_radius_all(6)
+	background.set_content_margin_all(10)
+	_collection_panel.add_theme_stylebox_override("panel", background)
+
+	_collection_list = VBoxContainer.new()
+	_collection_list.add_theme_constant_override("separation", 4)
+	_collection_panel.add_child(_collection_list)
+	column.add_child(_collection_panel)
+	return column
+
+func _toggle_collection() -> void:
+	_collection_panel.visible = not _collection_panel.visible
+	_collection_button.text = ("▾ Collection" if _collection_panel.visible
+		else "▸ Collection")
+
+func set_collection(fossils: Array[FossilData]) -> void:
+	if _collection_list == null:
+		return
+	for child in _collection_list.get_children():
+		child.queue_free()
+	if fossils.is_empty():
+		var empty := Label.new()
+		empty.text = "Aucun bloc en reserve."
+		_collection_list.add_child(empty)
+		return
+	var number := 0
+	for entry in fossils:
+		number += 1
+		var button := Button.new()
+		button.text = "Bloc n°%d — %s" % [number, _origin_of(entry)]
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(func() -> void:
+			_toggle_collection()
+			fossil_requested.emit(entry))
+		_collection_list.add_child(button)
+
+func _origin_of(entry: FossilData) -> String:
+	var site := FossilLibrary.site_for(entry)
+	if site == null:
+		return "provenance inconnue"
+	return "%s, %s" % [site.site_name, site.region]
 
 func set_title(text: String) -> void:
 	if _title != null:

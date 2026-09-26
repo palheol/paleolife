@@ -95,10 +95,13 @@ void fragment() {
 	col *= 1.0 - (1.0 - bedding) * lamination_strength;
 
 	// Derniere couche : un voile de poussiere translucide et mat, sous lequel on
-	// devine le fossile comme a travers une surface sablee. Le grain module
-	// legerement l'opacite pour que le voile ne soit pas uniforme.
-	float veil = clamp(dust_opacity + (grain - 0.5) * 0.22, 0.0, 1.0);
-	ALPHA = mix(1.0, veil, v_dust);
+	// devine le fossile comme a travers une surface sablee. Son opacite varie a
+	// plusieurs echelles, sinon la pellicule se lit comme une enieme dalle de
+	// roche aux bords nets.
+	float patches = fbm(v_world * mottle_scale * 2.4);
+	float speckle = value_noise(v_world * grain_scale * 1.7);
+	float veil = dust_opacity + (patches - 0.5) * 0.55 + (speckle - 0.5) * 0.3;
+	ALPHA = mix(1.0, clamp(veil, 0.04, 1.0), v_dust);
 
 	ALBEDO = mix(col, col * 1.12, v_dust);
 	ROUGHNESS = clamp(rock_roughness - (grain - 0.5) * 0.12 + v_dust * 0.12, 0.0, 1.0);

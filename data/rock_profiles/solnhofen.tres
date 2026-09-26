@@ -17,5 +17,6 @@ lamination_scale = 700.0
 lamination_strength = 0.12
 roughness = 0.8
 dust_opacity = 0.42
+dust_thickness_ratio = 0.16
 layer_count = 2
 layer_height = 0.004

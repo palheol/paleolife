@@ -17,6 +17,18 @@ class_name ToolCursor
 ## occupe quelques centaines de pixels n'en a pas besoin. 0 desactive la reduction.
 @export var max_texture_size: int = 512
 
+@export_group("Adaptation a la piece")
+## Taille de piece pour laquelle les longueurs ci-dessous sont donnees telles quelles.
+@export var reference_specimen_m: float = 0.45
+## Douceur de la reponse : 1 = proportionnel, 0 = taille fixe. Une valeur basse
+## donne l'impression de changer d'outil, pas de changer d'echelle.
+@export_range(0.0, 1.0, 0.05) var size_response: float = 0.5
+@export var min_tool_scale: float = 0.5
+@export var max_tool_scale: float = 1.25
+## Teinte des petits outils : comme dans une trousse, les tailles se
+## reconnaissent a la couleur du manche.
+@export var small_tool_tint: Color = Color(0.76, 0.85, 1.0)
+
 @export_group("Micro-percuteur")
 @export var percuteur_model: String = "res://3D models/PEN.glb"
 @export var percuteur_length_m: float = 0.17
@@ -41,14 +53,37 @@ var _tools: Dictionary = {}   # Tool -> { node, axis, tip_local, scale }
 var _active: Dictionary = {}
 var _cursor_hidden: bool = false
 
-func setup(slab: RockSlab, camera: Camera3D) -> void:
+func setup(slab: RockSlab, camera: Camera3D, specimen_size_m: float) -> void:
 	_slab = slab
 	_camera = camera
-	_load(DigController.Tool.PERCUTEUR, percuteur_model, percuteur_length_m,
-		percuteur_flip, Color(0, 0, 0, 0))
-	_load(DigController.Tool.PINCEAU, pinceau_model, pinceau_length_m,
-		pinceau_flip, Color(0, 0, 0, 0))
-	_load(DigController.Tool.COLLE, colle_model, colle_length_m, colle_flip, colle_tint)
+	# Les outils sont redimensionnes a chaque nouvelle piece : on repart des
+	# modeles d'origine plutot que d'empiler des exemplaires.
+	_active = {}
+	_tools.clear()
+	for child in get_children():
+		remove_child(child)
+		child.queue_free()
+	var factor := _size_factor(specimen_size_m)
+	var tint := _tint_for(factor)
+	_load(DigController.Tool.PERCUTEUR, percuteur_model, percuteur_length_m * factor,
+		percuteur_flip, Color(0, 0, 0, 0), tint)
+	_load(DigController.Tool.PINCEAU, pinceau_model, pinceau_length_m * factor,
+		pinceau_flip, Color(0, 0, 0, 0), tint)
+	_load(DigController.Tool.COLLE, colle_model, colle_length_m * factor,
+		colle_flip, colle_tint * tint, tint)
+
+## Un petit fossile appelle un petit outil, mais l'ecart reste mesure : la
+## reponse est adoucie, sinon le pinceau deviendrait un cure-dent sur une piece
+## de quelques centimetres.
+func _size_factor(specimen_size_m: float) -> float:
+	if specimen_size_m <= 0.0 or reference_specimen_m <= 0.0:
+		return 1.0
+	var ratio := specimen_size_m / reference_specimen_m
+	return clampf(pow(ratio, size_response), min_tool_scale, max_tool_scale)
+
+func _tint_for(factor: float) -> Color:
+	var weight := clampf(inverse_lerp(min_tool_scale, 1.0, factor), 0.0, 1.0)
+	return small_tool_tint.lerp(Color.WHITE, weight)
 
 func show_tool(tool: DigController.Tool) -> void:
 	for key in _tools:
@@ -56,8 +91,10 @@ func show_tool(tool: DigController.Tool) -> void:
 		(entry["node"] as Node3D).visible = false
 	_active = _tools.get(tool, {})
 
+## replacement : couleur imposee aux modeles sans materiau (alpha 0 = ne pas
+## toucher). size_tint : teinte multipliee par-dessus, qui signale la taille.
 func _load(tool: DigController.Tool, path: String, target_length: float, flip: bool,
-		tint: Color) -> void:
+		replacement: Color, size_tint: Color) -> void:
 	if not ResourceLoader.exists(path):
 		push_warning("[ToolCursor] Modele d'outil introuvable : %s" % path)
 		return
@@ -68,10 +105,10 @@ func _load(tool: DigController.Tool, path: String, target_length: float, flip: b
 	add_child(node)
 	node.visible = false
 	_hide_marked_nodes(node)
-	if tint.a > 0.0:
-		_apply_tint(node, tint)
-	elif max_texture_size > 0:
-		_downscale_textures(node, max_texture_size)
+	if replacement.a > 0.0:
+		_apply_tint(node, replacement)
+	else:
+		_prepare_materials(node, max_texture_size, size_tint)
 
 	# L'axe du manche est cherche par analyse en composantes principales, et non
 	# d'apres la boite englobante : ces modeles sont parfois ranges de biais
@@ -167,10 +204,13 @@ func _sample_points(root: Node3D, wanted: int) -> PackedVector3Array:
 				index += stride
 	return points
 
-## Reduit les textures trop grandes, sans toucher aux fichiers d'origine : on
-## remplace les materiaux par des copies pointant vers des versions reduites.
-func _downscale_textures(root: Node3D, limit: int) -> void:
+## Copie les materiaux pour y appliquer deux choses sans toucher aux fichiers
+## d'origine : la reduction des textures et la teinte liee a la taille.
+func _prepare_materials(root: Node3D, limit: int, size_tint: Color) -> void:
 	var already_reduced: Dictionary = {}
+	var neutral := size_tint.is_equal_approx(Color.WHITE)
+	if limit <= 0 and neutral:
+		return
 	for node in _descendants(root):
 		var instance := node as MeshInstance3D
 		if instance == null or instance.mesh == null:
@@ -180,10 +220,13 @@ func _downscale_textures(root: Node3D, limit: int) -> void:
 			if source == null:
 				continue
 			var copy := source.duplicate() as BaseMaterial3D
-			copy.albedo_texture = _shrink(copy.albedo_texture, limit, already_reduced)
-			copy.normal_texture = _shrink(copy.normal_texture, limit, already_reduced)
-			copy.roughness_texture = _shrink(copy.roughness_texture, limit, already_reduced)
-			copy.metallic_texture = _shrink(copy.metallic_texture, limit, already_reduced)
+			if limit > 0:
+				copy.albedo_texture = _shrink(copy.albedo_texture, limit, already_reduced)
+				copy.normal_texture = _shrink(copy.normal_texture, limit, already_reduced)
+				copy.roughness_texture = _shrink(copy.roughness_texture, limit, already_reduced)
+				copy.metallic_texture = _shrink(copy.metallic_texture, limit, already_reduced)
+			if not neutral:
+				copy.albedo_color = source.albedo_color * size_tint
 			instance.set_surface_override_material(surface, copy)
 
 func _shrink(texture: Texture2D, limit: int, already_reduced: Dictionary) -> Texture2D:

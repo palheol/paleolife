@@ -39,7 +39,10 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 @export_group("Indice de depart")
 ## Petite zone deja erodee qui laisse deviner ou commencer (comme un fossile
 ## qui affleure naturellement sur le terrain).
-@export var hint_radius_cells: int = 6
+## Rayon de l'affleurement, en fraction du plus petit cote du bloc. Exprime en
+## proportion et non en cellules : un meme nombre de cellules donne un discret
+## grattage sur une plaque de 35 cm et un cratere sur un bloc de 9 cm.
+@export_range(0.02, 0.3, 0.01) var hint_radius_ratio: float = 0.09
 @export var hint_remaining_layers: int = 0
 ## Fraction centrale de la plaque ou chercher le point d'affleurement (0.6 = 60 %).
 @export_range(0.1, 1.0, 0.05) var hint_search_area: float = 0.55
@@ -71,20 +74,34 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 ## qui le recouvrent reellement (le reste n'est que de la marge).
 var _specimen_top: PackedFloat32Array = PackedFloat32Array()
 var _specimen_mask: PackedByteArray = PackedByteArray()
+## Taille reelle de la piece posee sur l'etabli : sert a dimensionner les outils.
+var _specimen_size_m: float = 0.45
 
 func _ready() -> void:
 	_build_lighting()
 	_connect_ui()
+	_ui.set_collection(FossilLibrary.all_fossils())
+	load_fossil(fossil, rock_profile)
 
+## Installe une piece sur l'etabli. Appele au demarrage, puis a chaque fois que
+## le joueur en choisit une autre dans sa collection.
+func load_fossil(wanted_fossil: FossilData, wanted_profile: RockProfile = null) -> void:
+	fossil = wanted_fossil
+	rock_profile = wanted_profile
 	if rock_profile == null:
-		_warn("Aucun profil de roche assigne sur la scene Lab.")
+		rock_profile = FossilLibrary.profile_for(fossil)
+	if rock_profile == null:
+		_warn("Aucun profil de roche pour ce fossile.")
 		return
 
 	# Garde-fou scientifique : le profil de roche doit correspondre au gisement
 	# d'ou vient le fossile, sinon on prepare un specimen dans la mauvaise roche.
+	# Console uniquement : l'afficher revelerait la provenance au mauvais moment.
 	if fossil != null and fossil.site_id != rock_profile.site_id:
-		_warn("%s vient du gisement '%s' mais la roche chargee est '%s'."
+		push_warning("[Lab] %s vient du gisement '%s' mais la roche chargee est '%s'."
 			% [fossil.id, fossil.site_id, rock_profile.site_id])
+
+	_clear_bench()
 
 	var meshes := _setup_specimen()
 	if meshes.is_empty():
@@ -98,14 +115,32 @@ func _ready() -> void:
 		maxf(_slab.size_x(), _slab.size_z()))
 
 	_dig.setup(_slab, _camera, _cracks, _specimen_mask)
-	_tool_cursor.setup(_slab, _camera)
+	_tool_cursor.setup(_slab, _camera, _specimen_size_m)
 	_tool_cursor.show_tool(_dig.current_tool)
 
-	var title := rock_profile.display_name
-	if fossil != null:
-		title = "%s %s — %s" % [fossil.genus, fossil.species, rock_profile.display_name]
-	_set_status("%s · plaque %d × %d cm"
-		% [title, roundi(_slab.size_x() * 100.0), roundi(_slab.size_z() * 100.0)])
+	# Surtout pas le nom de l'espece : c'est le quiz d'etude qui la revele
+	# (GDD §3.3). Au labo, le joueur ne sait que d'ou vient son bloc.
+	_set_status("Spécimen à préparer · %s · bloc %d × %d cm" % [
+		_origin_label(),
+		roundi(_slab.size_x() * 100.0),
+		roundi(_slab.size_z() * 100.0)])
+
+## Vide l'etabli avant d'y poser une autre piece. Les noeuds sont retires de
+## l'arbre tout de suite, et pas seulement mis en attente de suppression, pour
+## qu'ils ne faussent pas les mesures faites sur le nouveau specimen.
+func _clear_bench() -> void:
+	for group in [_fossil_root, _cracks]:
+		for child in group.get_children():
+			group.remove_child(child)
+			child.queue_free()
+	_dig.reset()
+
+## Provenance du bloc, la seule chose que le preparateur connaisse avant l'etude.
+func _origin_label() -> String:
+	var site := FossilLibrary.site_for(fossil)
+	if site != null:
+		return "%s, %s" % [site.site_name, site.region]
+	return rock_profile.display_name
 
 # --- Specimen ---------------------------------------------------------------
 
@@ -156,10 +191,10 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 
 	# La taille propre a la piece prime sur celle de la scene : une plaque et un
 	# crane isole n'ont pas du tout les memes dimensions.
-	var wanted := specimen_size_m
+	_specimen_size_m = specimen_size_m
 	if fossil.specimen_size_cm > 0.0:
-		wanted = fossil.specimen_size_cm * 0.01
-	var scale_factor := wanted / largest
+		_specimen_size_m = fossil.specimen_size_cm * 0.01
+	var scale_factor := _specimen_size_m / largest
 	model.scale = Vector3.ONE * scale_factor
 
 	var scaled := AABB(bounds.position * scale_factor, bounds.size * scale_factor)
@@ -532,7 +567,9 @@ func _carve_starting_hint() -> void:
 				best_height = _specimen_top[cell]
 				best_cell = Vector2i(col, row)
 
-	_slab.carve_disc(best_cell, hint_radius_cells, hint_remaining_layers)
+	var span := minf(_slab.size_x(), _slab.size_z())
+	var radius := maxi(2, roundi(span * hint_radius_ratio / _slab.cell_size))
+	_slab.carve_disc(best_cell, radius, hint_remaining_layers)
 
 # --- Ambiance ---------------------------------------------------------------
 
@@ -572,6 +609,7 @@ func _connect_ui() -> void:
 	_dig.risk_changed.connect(_ui.set_risk)
 	_dig.stats_changed.connect(_ui.set_stats)
 	_dig.tool_changed.connect(_tool_cursor.show_tool)
+	_ui.fossil_requested.connect(func(chosen: FossilData) -> void: load_fossil(chosen))
 
 func _set_status(message: String) -> void:
 	if _ui != null:
