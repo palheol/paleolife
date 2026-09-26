@@ -44,6 +44,7 @@ var _cracks_root: Node3D
 var _mask: PackedByteArray = PackedByteArray()
 var _crack_positions: PackedVector3Array = PackedVector3Array()
 var _crack_nodes: Array[Node3D] = []
+var input_enabled: bool = true
 var _pressing: bool = false
 var _last_screen: Vector2 = Vector2.ZERO
 var _last_motion_ms: int = 0
@@ -71,6 +72,11 @@ func reset() -> void:
 	_pressing = false
 	risk_changed.emit(risk)
 
+## Change les cellules qui comptent pour l'avancement, sans toucher au reste.
+func set_progress_mask(mask: PackedByteArray) -> void:
+	_mask = mask
+	_emit_stats()
+
 func select_tool(tool: Tool) -> void:
 	current_tool = tool
 	tool_changed.emit(tool)
@@ -83,7 +89,7 @@ func _process(delta: float) -> void:
 	risk_changed.emit(risk)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _slab == null or _camera == null:
+	if not input_enabled or _slab == null or _camera == null:
 		return
 
 	var button := event as InputEventMouseButton

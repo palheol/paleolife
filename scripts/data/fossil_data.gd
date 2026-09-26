@@ -30,6 +30,12 @@ class_name FossilData
 # Statut du specimen expose ; affichage sur le cartel laisse au choix du joueur (voir GDD §3.4).
 @export_enum("original", "moulage", "réplique") var specimen_status: String = "original"
 
+## Piece conservee sur plaque (lagerstatte lamine) ou degagee en volume.
+## Une plaque est redressee a l'horizontale a l'arrivee sur l'etabli ; une piece
+## en volume garde l'orientation de son modele, car chercher un "plan moyen" sur
+## un os n'a aucun sens et le poserait dans une position arbitraire.
+@export var on_plate: bool = true
+
 @export_group("Ressources visuelles")
 @export var model_path: String = "" # chemin vers le futur modele 3D (vide pour l'instant)
 @export var icon_placeholder: String = "" # emoji utilise dans les maquettes en attendant

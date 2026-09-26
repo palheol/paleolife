@@ -30,6 +30,7 @@ var _bases: PackedFloat32Array = PackedFloat32Array()
 var _positions: PackedVector3Array = PackedVector3Array()
 var _normals: PackedVector3Array = PackedVector3Array()
 var _colors: PackedColorArray = PackedColorArray()
+var _interest: PackedByteArray = PackedByteArray()
 var _floor_level: float = 0.0
 var _max_top: float = 0.0
 var _dirty: bool = false
@@ -241,7 +242,7 @@ func _write_cell(col: int, row: int) -> void:
 	var c11 := _corner(col + 1, row + 1)
 	var c10 := _corner(col + 1, row)
 	var y := cell_top(col, row)
-	var shade := _shade_for(height, max_layers)
+	var shade := _shade_for(height, max_layers, row * columns + col)
 
 	# Une cellule entierement degagee ne dessine plus de dessus : c'est ce qui
 	# laisse apparaitre le specimen en dessous.
@@ -280,7 +281,7 @@ func _write_wall(slot: int, col: int, row: int, y_top: float, c_top: Color, dx: 
 		return
 	# Degrade du bas vers le haut : les couches se lisent sur la tranche.
 	var neighbour_layers := get_layers_at(col + dx, row + dz)
-	var c_bottom := _shade_for(neighbour_layers, max_layers)
+	var c_bottom := _shade_for(neighbour_layers, max_layers, (row + dz) * columns + (col + dx))
 	_write_quad(slot,
 		Vector3(a.x, neighbour_top, a.y), Vector3(a.x, y_top, a.y),
 		Vector3(b.x, y_top, b.y), Vector3(b.x, neighbour_top, b.y),
@@ -318,8 +319,20 @@ func _write_quad(base: int, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3,
 ##   vert  = 1 sur la derniere couche, celle que le pinceau enleve. Le shader
 ##           la rend translucide, comme un voile de poussiere sous lequel on
 ##           devine deja le fossile.
-func _shade_for(layers: int, max_layers: float) -> Color:
-	return Color(float(layers) / max_layers, 1.0 if layers == 1 else 0.0, 0.0)
+func _shade_for(layers: int, max_layers: float, cell: int) -> Color:
+	var interest := 0.0
+	if cell >= 0 and cell < _interest.size() and _interest[cell] != 0:
+		interest = 1.0
+	return Color(float(layers) / max_layers, 1.0 if layers == 1 else 0.0, interest)
+
+## Zone que le joueur doit reellement degager, transmise au shader pour pouvoir
+## l'afficher depuis le volet de reglage.
+func set_interest_mask(mask: PackedByteArray) -> void:
+	_interest = mask
+	for row in rows:
+		for col in columns:
+			_write_cell(col, row)
+	_dirty = true
 
 ## Triangles d'aire nulle : la carte graphique les ecarte, ce qui permet de
 ## garder un emplacement de taille fixe par cellule.

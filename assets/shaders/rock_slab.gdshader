@@ -18,13 +18,25 @@ uniform float mottle_strength = 0.25;
 uniform float lamination_scale = 900.0;
 uniform float lamination_strength = 0.10;
 uniform float rock_roughness = 0.82;
+// Assombrissement des faces verticales : flancs du bloc et parois des creux
+// recoivent bien moins de lumiere du ciel qu'une surface tournee vers le haut.
+// Sans cela, le pourtour du bloc sature des qu'on abaisse le regard.
+uniform float side_shading : hint_range(0.0, 1.0) = 0.45;
+// Outil de reglage : teinte la zone que le joueur devra degager, pour verifier
+// que la detection vise bien la piece et non la roche vide autour.
+uniform bool show_interest_zone = false;
+// Mode de trace : la gangue s'efface pour laisser voir la piece propre, et seule
+// la zone peinte reste lisible.
+uniform bool zone_edit_mode = false;
+uniform vec3 interest_color : source_color = vec3(0.35, 0.85, 0.45);
 // Opacite du voile de poussiere (derniere couche, celle du pinceau).
 uniform float dust_opacity : hint_range(0.0, 1.0) = 0.55;
 
 varying vec3 v_world;
 varying vec3 v_normal_world;
 varying float v_layer; // 1.0 = surface intacte, 0.0 = fond de la gangue
-varying float v_dust;  // 1.0 sur la derniere couche
+varying float v_dust;     // 1.0 sur la derniere couche
+varying float v_interest; // 1.0 sur les cellules a degager
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -67,6 +79,7 @@ void vertex() {
 	v_normal_world = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	v_layer = COLOR.r;
 	v_dust = COLOR.g;
+	v_interest = COLOR.b;
 }
 
 void fragment() {
@@ -103,7 +116,18 @@ void fragment() {
 	float veil = dust_opacity + (patches - 0.5) * 0.55 + (speckle - 0.5) * 0.3;
 	ALPHA = mix(1.0, clamp(veil, 0.04, 1.0), v_dust);
 
+	col *= mix(1.0 - side_shading, 1.0, upness);
+	if (show_interest_zone) {
+		col = mix(col, interest_color, v_interest * 0.5);
+	}
 	ALBEDO = mix(col, col * 1.12, v_dust);
 	ROUGHNESS = clamp(rock_roughness - (grain - 0.5) * 0.12 + v_dust * 0.12, 0.0, 1.0);
 	SPECULAR = mix(0.25, 0.12, v_dust);
+
+	if (zone_edit_mode) {
+		ALBEDO = mix(vec3(0.55, 0.53, 0.5), interest_color, v_interest);
+		ALPHA = mix(0.08, 0.5, v_interest);
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+	}
 }

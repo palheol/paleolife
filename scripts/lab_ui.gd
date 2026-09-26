@@ -6,6 +6,10 @@ class_name LabUI
 
 signal tool_requested(tool: DigController.Tool)
 signal fossil_requested(fossil: FossilData)
+signal zone_overlay_toggled(visible_zone: bool)
+signal zone_edit_toggled(active: bool)
+signal zone_erase_toggled(erasing: bool)
+signal zone_save_requested()
 
 const SAFE_COLOR := Color(0.42, 0.60, 0.34)
 const WARNING_COLOR := Color(0.85, 0.60, 0.24)
@@ -22,6 +26,8 @@ var _tool_buttons: Dictionary = {}
 var _collection_button: Button
 var _collection_panel: PanelContainer
 var _collection_list: VBoxContainer
+var _admin_button: Button
+var _admin_panel: PanelContainer
 
 func _ready() -> void:
 	var root := MarginContainer.new()
@@ -58,6 +64,7 @@ func _ready() -> void:
 	column.add_child(_hint)
 
 	column.add_child(_build_collection_panel())
+	column.add_child(_build_admin_panel())
 
 	select_tool(DigController.Tool.PERCUTEUR)
 	set_risk(0.0)
@@ -182,6 +189,68 @@ func _origin_of(entry: FossilData) -> String:
 	if site == null:
 		return "provenance inconnue"
 	return "%s, %s" % [site.site_name, site.region]
+
+## Volet de reglage, destine a la mise au point et non au joueur : il montre la
+## zone que la detection retient comme "a degager", pour verifier qu'elle suit
+## bien la piece, et laisse ajuster le seuil en direct.
+func _build_admin_panel() -> Control:
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 6)
+
+	_admin_button = Button.new()
+	_admin_button.text = "▸ Réglage"
+	_admin_button.focus_mode = Control.FOCUS_NONE
+	_admin_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_admin_button.pressed.connect(func() -> void:
+		_admin_panel.visible = not _admin_panel.visible
+		_admin_button.text = "▾ Réglage" if _admin_panel.visible else "▸ Réglage")
+	column.add_child(_admin_button)
+
+	_admin_panel = PanelContainer.new()
+	_admin_panel.visible = false
+	_admin_panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	var background := StyleBoxFlat.new()
+	background.bg_color = Color(0.13, 0.11, 0.09, 0.92)
+	background.set_corner_radius_all(6)
+	background.set_content_margin_all(10)
+	_admin_panel.add_theme_stylebox_override("panel", background)
+
+	var inner := VBoxContainer.new()
+	inner.add_theme_constant_override("separation", 6)
+
+	var show := CheckButton.new()
+	show.text = "Afficher la zone à dégager"
+	show.focus_mode = Control.FOCUS_NONE
+	show.toggled.connect(func(pressed: bool) -> void: zone_overlay_toggled.emit(pressed))
+	inner.add_child(show)
+
+	var edit := CheckButton.new()
+	edit.text = "Tracer la zone sur la pièce propre"
+	edit.focus_mode = Control.FOCUS_NONE
+	edit.toggled.connect(func(pressed: bool) -> void: zone_edit_toggled.emit(pressed))
+	inner.add_child(edit)
+
+	var erase := CheckButton.new()
+	erase.text = "Gomme"
+	erase.focus_mode = Control.FOCUS_NONE
+	erase.toggled.connect(func(pressed: bool) -> void: zone_erase_toggled.emit(pressed))
+	inner.add_child(erase)
+
+	var help := Label.new()
+	help.text = "Clic gauche : peindre · le tracé s'applique ensuite aux joueurs"
+	help.add_theme_color_override("font_color", Color(0.72, 0.68, 0.60))
+	inner.add_child(help)
+
+	var save := Button.new()
+	save.text = "Enregistrer la zone"
+	save.focus_mode = Control.FOCUS_NONE
+	save.pressed.connect(func() -> void: zone_save_requested.emit())
+	inner.add_child(save)
+
+	_admin_panel.add_child(inner)
+	column.add_child(_admin_panel)
+	return column
 
 func set_title(text: String) -> void:
 	if _title != null:

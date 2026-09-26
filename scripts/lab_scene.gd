@@ -43,6 +43,14 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 ## proportion et non en cellules : un meme nombre de cellules donne un discret
 ## grattage sur une plaque de 35 cm et un cratere sur un bloc de 9 cm.
 @export_range(0.02, 0.3, 0.01) var hint_radius_ratio: float = 0.09
+
+@export_group("Zone a degager")
+## Part des hauteurs tenue pour de la matrice : au-dela, la piece se detache.
+## Un seuil en millimetres ne conviendrait pas, la rugosite d'une dalle variant
+## d'un gisement a l'autre.
+## Rayon du pinceau de trace, en cellules.
+## Marge de travail conservee autour de l'os, en cellules.
+@export_range(1, 20) var zone_brush_cells: int = 5
 @export var hint_remaining_layers: int = 0
 ## Fraction centrale de la plaque ou chercher le point d'affleurement (0.6 = 60 %).
 @export_range(0.1, 1.0, 0.05) var hint_search_area: float = 0.55
@@ -74,8 +82,14 @@ const SHADER_PATH := "res://assets/shaders/rock_slab.gdshader"
 ## qui le recouvrent reellement (le reste n'est que de la marge).
 var _specimen_top: PackedFloat32Array = PackedFloat32Array()
 var _specimen_mask: PackedByteArray = PackedByteArray()
+## Cellules qui comptent reellement pour la progression : celles ou la piece se
+## detache de la matrice, et non toute la dalle scannee.
+var _interest_mask: PackedByteArray = PackedByteArray()
 ## Taille reelle de la piece posee sur l'etabli : sert a dimensionner les outils.
 var _specimen_size_m: float = 0.45
+var _zone_editing: bool = false
+var _zone_erasing: bool = false
+var _zone_painting: bool = false
 
 func _ready() -> void:
 	_build_lighting()
@@ -114,7 +128,8 @@ func load_fossil(wanted_fossil: FossilData, wanted_profile: RockProfile = null) 
 		Vector3(0.0, _slab.position.y + _slab.max_top() * 0.5, 0.0),
 		maxf(_slab.size_x(), _slab.size_z()))
 
-	_dig.setup(_slab, _camera, _cracks, _specimen_mask)
+	_slab.set_interest_mask(_interest_mask)
+	_dig.setup(_slab, _camera, _cracks, _interest_mask)
 	_tool_cursor.setup(_slab, _camera, _specimen_size_m)
 	_tool_cursor.show_tool(_dig.current_tool)
 
@@ -180,7 +195,9 @@ func _setup_specimen() -> Array[MeshInstance3D]:
 	for instance in meshes:
 		_ensure_normals(instance)
 
-	if level_specimen:
+	# Seules les plaques sont redressees : une piece en volume garde l'orientation
+	# voulue par son modele, on ne lui impose pas un plan moyen arbitraire.
+	if level_specimen and fossil.on_plate:
 		_level_specimen(model, meshes)
 
 	var bounds := _combined_aabb(model, meshes)
@@ -432,6 +449,7 @@ func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
 	# ce maximum est souvent un bord releve du bloc, loin de la face travaillee.
 	var face_level := _median_specimen_level()
 	var depth := _drape_depth(face_level)
+	_build_interest_zone(columns, rows, face_level, depth)
 
 	# Tout ce qui s'ecarte trop de ce niveau est ramene dans une fourchette : en
 	# dessous ce sont les flancs du bloc, au-dessus des asperites isolees.
@@ -461,6 +479,119 @@ func _bases_from_specimen(columns: int, rows: int) -> PackedFloat32Array:
 		# 0 = plaque plate au niveau moyen de la face, 1 = la roche epouse le relief.
 		bases[cell] = lerpf(face_level, surface[cell], relief_follow) + clearance_m
 	return bases
+
+## Delimite la zone qui merite d'etre degagee. Sur une plaque, le scan couvre
+## toute la dalle : exiger de la nettoyer entierement reviendrait a faire gratter
+## des dizaines de centimetres de roche vide. On ne retient donc que les cellules
+## ou la piece se detache en relief au-dessus de la matrice — ce que le
+## preparateur repere a l'oeil — elargies de quelques cellules pour garder une
+## marge de travail autour de l'os.
+func _build_interest_zone(columns: int, rows: int, face_level: float, depth: float) -> void:
+	var count := columns * rows
+	_interest_mask = PackedByteArray()
+	_interest_mask.resize(count)
+
+	# Une piece degagee en volume n'a pas de matrice a distinguer : tout compte.
+	if fossil != null and not fossil.on_plate:
+		for cell in count:
+			_interest_mask[cell] = _specimen_mask[cell]
+		return
+
+	# Zone tracee a la main sur le fossile propre, via le volet de reglage, puis
+	# enregistree a cote de la fiche. Deduire cette zone du relief a ete tente :
+	# sur des scans de photogrammetrie, le seuil attrape le grain de la dalle et
+	# son bord releve plutot que l'os. Un trace d'auteur est fiable, et il dit ce
+	# qui merite d'etre degage — un jugement, pas une mesure.
+	if _load_zone_mask(columns, rows):
+		return
+	# Sans trace enregistree, toute la piece compte.
+	_interest_mask = _specimen_mask.duplicate()
+
+## Emplacement du trace enregistre pour une piece donnee.
+static func zone_path(fossil_id: String) -> String:
+	return "res://data/zones/%s.png" % fossil_id
+
+## Relit le trace et l'echantillonne sur la grille. L'image est stockee en
+## coordonnees normalisees : elle reste valable si la finesse de la grille change.
+func _load_zone_mask(columns: int, rows: int) -> bool:
+	if fossil == null:
+		return false
+	var path := zone_path(fossil.id)
+	var image: Image = null
+	if ResourceLoader.exists(path):
+		var texture := ResourceLoader.load(path) as Texture2D
+		if texture != null:
+			image = texture.get_image()
+	elif FileAccess.file_exists(path):
+		# Trace tout juste enregistre : Godot ne l'a pas encore importe, donc
+		# ResourceLoader l'ignore. On lit alors le fichier tel quel.
+		image = Image.load_from_file(path)
+	if image == null:
+		return false
+	if image.is_compressed():
+		image.decompress()
+
+	var painted := 0
+	for row in rows:
+		for col in columns:
+			var x := int(float(col) / float(columns) * float(image.get_width()))
+			var y := int(float(row) / float(rows) * float(image.get_height()))
+			if image.get_pixel(
+					clampi(x, 0, image.get_width() - 1),
+					clampi(y, 0, image.get_height() - 1)).r > 0.5:
+				_interest_mask[row * columns + col] = 1
+				painted += 1
+	return painted > 0
+
+## Enregistre le trace courant a cote de la fiche du fossile.
+func save_zone_mask() -> void:
+	if fossil == null or _interest_mask.is_empty():
+		return
+	var columns := _slab.columns
+	var rows := _slab.rows
+	var image := Image.create(columns, rows, false, Image.FORMAT_L8)
+	for row in rows:
+		for col in columns:
+			var on := _interest_mask[row * columns + col] != 0
+			image.set_pixel(col, row, Color.WHITE if on else Color.BLACK)
+	DirAccess.make_dir_recursive_absolute(
+		ProjectSettings.globalize_path("res://data/zones"))
+	var saved := image.save_png(zone_path(fossil.id))
+	if saved == OK:
+		_set_status("Zone enregistrée pour %s" % fossil.id)
+	else:
+		_warn("Enregistrement de la zone impossible (code %d)." % saved)
+
+## Peint ou efface la zone autour d'une cellule.
+func paint_zone(centre: Vector2i, radius: int, enabled: bool) -> void:
+	var columns := _slab.columns
+	var rows := _slab.rows
+	for row in range(centre.y - radius, centre.y + radius + 1):
+		for col in range(centre.x - radius, centre.x + radius + 1):
+			if col < 0 or col >= columns or row < 0 or row >= rows:
+				continue
+			if Vector2(col - centre.x, row - centre.y).length() > float(radius):
+				continue
+			_interest_mask[row * columns + col] = 1 if enabled else 0
+	_slab.set_interest_mask(_interest_mask)
+	_dig.set_progress_mask(_interest_mask)
+
+## Cellule ou la piece est le plus proche de la surface, cherchee au centre de la
+## dalle : c'est la que le fossile affleure, et c'est de la que part le joueur.
+func _find_seed_cell(columns: int, rows: int) -> int:
+	var margin_cols := int(float(columns) * (1.0 - hint_search_area) * 0.5)
+	var margin_rows := int(float(rows) * (1.0 - hint_search_area) * 0.5)
+	var best_height := -INF
+	var best := (rows / 2) * columns + columns / 2
+	for row in range(margin_rows, rows - margin_rows):
+		for col in range(margin_cols, columns - margin_cols):
+			var cell := row * columns + col
+			if _specimen_mask[cell] == 0:
+				continue
+			if _specimen_top[cell] > best_height:
+				best_height = _specimen_top[cell]
+				best = cell
+	return best
 
 ## Sur quelle hauteur la gangue suit le relief. Mesuree sur la piece elle-meme :
 ## une plaque de Solnhofen ne s'ecarte que de quelques millimetres de son plan
@@ -610,6 +741,57 @@ func _connect_ui() -> void:
 	_dig.stats_changed.connect(_ui.set_stats)
 	_dig.tool_changed.connect(_tool_cursor.show_tool)
 	_ui.fossil_requested.connect(func(chosen: FossilData) -> void: load_fossil(chosen))
+	_ui.zone_overlay_toggled.connect(_show_interest_zone)
+	_ui.zone_edit_toggled.connect(_set_zone_edit_mode)
+	_ui.zone_erase_toggled.connect(func(erasing: bool) -> void: _zone_erasing = erasing)
+	_ui.zone_save_requested.connect(save_zone_mask)
+
+## Volet de reglage : teinte les cellules que le joueur devra degager.
+func _show_interest_zone(visible_zone: bool) -> void:
+	var material := _slab.material_override as ShaderMaterial
+	if material != null:
+		material.set_shader_parameter("show_interest_zone", visible_zone)
+
+## En mode trace, la gangue devient translucide pour laisser voir la piece
+## propre, et le clic gauche peint au lieu de creuser.
+func _set_zone_edit_mode(active: bool) -> void:
+	_zone_editing = active
+	_dig.input_enabled = not active
+	_tool_cursor.visible = not active
+	var material := _slab.material_override as ShaderMaterial
+	if material != null:
+		material.set_shader_parameter("zone_edit_mode", active)
+	if active:
+		_set_status("Tracé de la zone — clic gauche pour peindre, puis Enregistrer")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not _zone_editing:
+		return
+	var pressing := false
+	var button := event as InputEventMouseButton
+	if button != null and button.button_index == MOUSE_BUTTON_LEFT:
+		pressing = button.pressed
+		_zone_painting = button.pressed
+	elif event is InputEventMouseMotion and _zone_painting:
+		pressing = true
+	if not pressing:
+		return
+
+	var position := get_viewport().get_mouse_position()
+	var origin := _camera.project_ray_origin(position)
+	var direction := _camera.project_ray_normal(position)
+	var hit := _slab.raycast(origin, direction)
+	var contact: Vector3
+	if hit.get("hit", false):
+		contact = hit["position"]
+	else:
+		var plane := Plane(Vector3.UP, _slab.global_position.y + _slab.max_top())
+		var fallback: Variant = plane.intersects_ray(origin, direction)
+		if fallback == null:
+			return
+		contact = fallback
+	paint_zone(_slab.local_to_cell(_slab.to_local(contact)), zone_brush_cells,
+		not _zone_erasing)
 
 func _set_status(message: String) -> void:
 	if _ui != null:

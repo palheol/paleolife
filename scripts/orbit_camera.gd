@@ -5,8 +5,10 @@ class_name OrbitCamera
 ## Clic droit maintenu = pivoter, molette = zoomer.
 ## Le clic gauche reste volontairement libre : il servira aux outils du labo.
 
-@export var min_pitch_degrees: float = 20.0
-@export var max_pitch_degrees: float = 87.0
+## Descendre presque au ras de l'etabli permet de voir la tranche du bloc, donc
+## l'empilement des couches, et de tourner autour de la piece.
+@export var min_pitch_degrees: float = 3.0
+@export var max_pitch_degrees: float = 88.0
 @export var orbit_sensitivity: float = 0.006
 @export var zoom_step: float = 0.12
 ## Plus la valeur est basse, plus le mouvement est mou (ambiance cosy, pas de saccade).
