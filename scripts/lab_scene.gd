@@ -432,6 +432,7 @@ func _build_rock_material() -> ShaderMaterial:
 	material.set_shader_parameter("lamination_scale", rock_profile.lamination_scale)
 	material.set_shader_parameter("lamination_strength", rock_profile.lamination_strength)
 	material.set_shader_parameter("rock_roughness", rock_profile.roughness)
+	material.set_shader_parameter("dust_opacity", rock_profile.dust_opacity)
 	return material
 
 ## Ouvre la petite fenetre de depart la ou le fossile est le plus proche de la

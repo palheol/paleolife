@@ -27,6 +27,13 @@ signal cracked()
 ## Tolerance de visee, en pixels, pour recoller une fissure d'un clic.
 @export var glue_reach_px: float = 45.0
 
+@export_group("Aspect des fissures")
+@export var crack_length_m: float = 0.032
+@export var crack_width_m: float = 0.0021
+@export var glue_radius_m: float = 0.014
+## Ce qu'il reste de la fissure une fois recollee : on doit encore la deviner.
+@export_range(0.0, 1.0, 0.05) var repaired_crack_opacity: float = 0.3
+
 var current_tool: Tool = Tool.PERCUTEUR
 var risk: float = 0.0
 var science_value: float = 100.0
@@ -157,27 +164,104 @@ func _add_crack() -> void:
 	cracked.emit()
 	_emit_stats()
 
-## Trace de fissure : une ligne brisee, plus lisible qu'un simple point.
+## Trace de fissure : un ruban de triangles suivant une ligne brisee, avec
+## quelques ramifications. Un simple trait d'un pixel etait invisible des qu'on
+## s'eloignait un peu ; un ruban garde son epaisseur reelle quel que soit le zoom.
 func _build_crack_mesh(position: Vector3) -> MeshInstance3D:
 	var immediate := ImmediateMesh.new()
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color(0.18, 0.06, 0.05)
-	material.vertex_color_use_as_albedo = false
+	immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 
-	immediate.surface_begin(Mesh.PRIMITIVE_LINE_STRIP, material)
 	var angle := randf() * TAU
-	var point := Vector3.ZERO
-	immediate.surface_add_vertex(point)
-	for segment in 6:
-		angle += randf_range(-0.7, 0.7)
-		point += Vector3(cos(angle), 0.0, sin(angle)) * randf_range(0.002, 0.004)
-		immediate.surface_add_vertex(point)
+	var main := _crack_path(Vector3.ZERO, angle, 7, crack_length_m)
+	_add_ribbon(immediate, main, crack_width_m)
+
+	# Ramifications : une fracture reelle se divise, elle ne suit pas un seul trait.
+	for branch in 2:
+		var start: Vector3 = main[randi_range(1, main.size() - 2)]
+		var side := angle + randf_range(-1.6, 1.6)
+		_add_ribbon(immediate, _crack_path(start, side, 4, crack_length_m * 0.45),
+			crack_width_m * 0.7)
 	immediate.surface_end()
 
 	var instance := MeshInstance3D.new()
 	instance.mesh = immediate
-	# Legerement au-dessus de la roche, sinon la ligne se noie dans la surface.
+	instance.material_override = _crack_material(1.0)
+	# Legerement au-dessus de la roche, sinon le trace se noie dans la surface.
+	instance.position = position + Vector3.UP * 0.0005
+	return instance
+
+func _crack_path(start: Vector3, angle: float, segments: int, length: float) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	var point := start
+	points.append(point)
+	for segment in segments:
+		angle += randf_range(-0.55, 0.55)
+		point += Vector3(cos(angle), 0.0, sin(angle)) * (length / float(segments))
+		points.append(point)
+	return points
+
+## Epaissit une ligne brisee en bande horizontale, en affinant vers les bouts.
+func _add_ribbon(immediate: ImmediateMesh, points: PackedVector3Array, width: float) -> void:
+	for index in points.size() - 1:
+		var a := points[index]
+		var b := points[index + 1]
+		var direction := (b - a)
+		if direction.length() < 0.00001:
+			continue
+		var side := Vector3(-direction.z, 0.0, direction.x).normalized()
+		var fade_a := width * (1.0 - float(index) / float(points.size()))
+		var fade_b := width * (1.0 - float(index + 1) / float(points.size()))
+		var a0 := a + side * fade_a
+		var a1 := a - side * fade_a
+		var b0 := b + side * fade_b
+		var b1 := b - side * fade_b
+		immediate.surface_add_vertex(a0)
+		immediate.surface_add_vertex(b0)
+		immediate.surface_add_vertex(b1)
+		immediate.surface_add_vertex(a0)
+		immediate.surface_add_vertex(b1)
+		immediate.surface_add_vertex(a1)
+
+func _crack_material(opacity: float) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color(0.14, 0.08, 0.06, opacity * 0.88)
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
+
+## Reflet de colle : un petit disque brillant dont l'opacite s'eteint vers le
+## bord, pour un fondu plutot qu'une pastille nette.
+func _build_glue_mesh(position: Vector3) -> MeshInstance3D:
+	var immediate := ImmediateMesh.new()
+	immediate.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var centre := Color(1.0, 0.97, 0.90, 0.45)
+	var rim := Color(1.0, 0.97, 0.90, 0.0)
+	var steps := 20
+	for step in steps:
+		var a := TAU * float(step) / float(steps)
+		var b := TAU * float(step + 1) / float(steps)
+		immediate.surface_set_color(centre)
+		immediate.surface_add_vertex(Vector3.ZERO)
+		immediate.surface_set_color(rim)
+		immediate.surface_add_vertex(Vector3(cos(a), 0.0, sin(a)) * glue_radius_m)
+		immediate.surface_set_color(rim)
+		immediate.surface_add_vertex(Vector3(cos(b), 0.0, sin(b)) * glue_radius_m)
+	immediate.surface_end()
+
+	var material := StandardMaterial3D.new()
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.vertex_color_use_as_albedo = true
+	material.albedo_color = Color(1.0, 0.99, 0.95, 1.0)
+	# Tres lisse : c'est la brillance du recollage qui doit accrocher la lumiere.
+	material.roughness = 0.08
+	material.metallic = 0.0
+	material.metallic_specular = 0.9
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+
+	var instance := MeshInstance3D.new()
+	instance.mesh = immediate
+	instance.material_override = material
 	instance.position = position + Vector3.UP * 0.0004
 	return instance
 
@@ -196,10 +280,15 @@ func _try_glue(screen_position: Vector2) -> void:
 			best = index
 	if best < 0:
 		return
+	var position := _crack_positions[best]
 	_crack_positions.remove_at(best)
-	var node := _crack_nodes.pop_at(best) as Node3D
+	var node := _crack_nodes.pop_at(best) as MeshInstance3D
 	if node != null:
-		node.queue_free()
+		# La fissure n'est pas effacee : elle s'attenue, et un reflet de colle
+		# vient s'y fondre. Le specimen porte desormais sa cicatrice.
+		node.material_override = _crack_material(repaired_crack_opacity)
+		if _cracks_root != null:
+			_cracks_root.add_child(_build_glue_mesh(position))
 	_emit_stats()
 
 func _emit_stats() -> void:

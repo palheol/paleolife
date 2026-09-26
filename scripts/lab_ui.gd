@@ -13,6 +13,8 @@ const DANGER_COLOR := Color(0.76, 0.33, 0.25)
 var _title: Label
 var _risk_fill: ColorRect
 var _risk_bar: PanelContainer
+var _risk_track: Control
+var _risk_ratio: float = 0.0
 var _stats: Label
 var _hint: Label
 var _tool_buttons: Dictionary = {}
@@ -82,20 +84,24 @@ func _build_risk_gauge() -> Control:
 
 	_risk_bar = PanelContainer.new()
 	_risk_bar.custom_minimum_size = Vector2(280, 14)
+	# Sans cela le conteneur s'etire sur toute la largeur de la fenetre, et le
+	# remplissage n'atteint jamais le bout de la barre.
+	_risk_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	var background := StyleBoxFlat.new()
 	background.bg_color = Color(0.16, 0.14, 0.12)
 	background.set_corner_radius_all(4)
 	_risk_bar.add_theme_stylebox_override("panel", background)
 
-	var holder := Control.new()
-	holder.clip_contents = true
-	_risk_bar.add_child(holder)
+	_risk_track = Control.new()
+	_risk_track.clip_contents = true
+	_risk_track.resized.connect(_update_risk_fill)
+	_risk_bar.add_child(_risk_track)
 
 	_risk_fill = ColorRect.new()
 	_risk_fill.color = SAFE_COLOR
 	# Ancres en haut a gauche : la largeur est pilotee a la main par set_risk().
 	_risk_fill.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	holder.add_child(_risk_fill)
+	_risk_track.add_child(_risk_fill)
 
 	column.add_child(_risk_bar)
 	return column
@@ -110,14 +116,22 @@ func select_tool(tool: DigController.Tool) -> void:
 		button.button_pressed = key == tool
 
 func set_risk(ratio: float) -> void:
-	if _risk_fill == null:
+	_risk_ratio = clampf(ratio, 0.0, 1.0)
+	_update_risk_fill()
+
+## La largeur est recalculee a partir de la taille reelle de la barre, pas de sa
+## taille minimale, et rejouee a chaque redimensionnement de la fenetre.
+func _update_risk_fill() -> void:
+	if _risk_fill == null or _risk_track == null:
 		return
-	var width := _risk_bar.custom_minimum_size.x * clampf(ratio, 0.0, 1.0)
-	_risk_fill.size = Vector2(width, _risk_bar.custom_minimum_size.y)
+	var track := _risk_track.size
+	if track.x <= 0.0:
+		track = _risk_bar.custom_minimum_size
+	_risk_fill.size = Vector2(track.x * _risk_ratio, track.y)
 	_risk_fill.color = SAFE_COLOR
-	if ratio > 0.75:
+	if _risk_ratio > 0.75:
 		_risk_fill.color = DANGER_COLOR
-	elif ratio > 0.45:
+	elif _risk_ratio > 0.45:
 		_risk_fill.color = WARNING_COLOR
 
 func set_stats(cleared: float, science_value: float, crack_count: int) -> void:

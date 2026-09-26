@@ -25,6 +25,9 @@ class_name RockProfile
 @export var lamination_scale: float = 900.0
 @export_range(0.0, 1.0) var lamination_strength: float = 0.10
 @export_range(0.0, 1.0) var roughness: float = 0.82
+## Opacite du voile de poussiere, la derniere couche que le pinceau enleve :
+## on doit deviner le fossile au travers, comme sous une surface sablee.
+@export_range(0.0, 1.0) var dust_opacity: float = 0.55
 
 @export_group("Relief")
 ## Nombre de couches a retirer avant d'atteindre le fossile.

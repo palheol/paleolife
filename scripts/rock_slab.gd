@@ -227,7 +227,7 @@ func _write_cell(col: int, row: int) -> void:
 	var x1 := x0 + cell_size
 	var z1 := z0 + cell_size
 	var y := cell_top(col, row)
-	var shade := Color(float(height) / max_layers, 0.0, 0.0)
+	var shade := _shade_for(height, max_layers)
 
 	# Une cellule entierement degagee ne dessine plus de dessus : c'est ce qui
 	# laisse apparaitre le specimen en dessous.
@@ -251,7 +251,7 @@ func _write_wall(slot: int, col: int, row: int, y_top: float, c_top: Color, dx: 
 		return
 	# Degrade du bas vers le haut : les couches se lisent sur la tranche.
 	var neighbour_layers := get_layers_at(col + dx, row + dz)
-	var c_bottom := Color(float(neighbour_layers) / max_layers, 0.0, 0.0)
+	var c_bottom := _shade_for(neighbour_layers, max_layers)
 	_write_quad(slot,
 		Vector3(ax, neighbour_top, az), Vector3(ax, y_top, az),
 		Vector3(bx, y_top, bz), Vector3(bx, neighbour_top, bz),
@@ -283,6 +283,14 @@ func _write_quad(base: int, p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3,
 	_colors[base + 3] = c0
 	_colors[base + 4] = c2
 	_colors[base + 5] = c3
+
+## Couleur de sommet servant de canal d'information au shader :
+##   rouge = couches restantes (0 a 1), pour la teinte de profondeur ;
+##   vert  = 1 sur la derniere couche, celle que le pinceau enleve. Le shader
+##           la rend translucide, comme un voile de poussiere sous lequel on
+##           devine deja le fossile.
+func _shade_for(layers: int, max_layers: float) -> Color:
+	return Color(float(layers) / max_layers, 1.0 if layers == 1 else 0.0, 0.0)
 
 ## Triangles d'aire nulle : la carte graphique les ecarte, ce qui permet de
 ## garder un emplacement de taille fixe par cellule.

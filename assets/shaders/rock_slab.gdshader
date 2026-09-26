@@ -1,5 +1,7 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
+// depth_prepass_alpha : la derniere couche est translucide, mais on veut
+// qu'elle masque quand meme correctement ce qui se trouve derriere elle.
+render_mode cull_disabled, depth_prepass_alpha, diffuse_burley, specular_schlick_ggx;
 
 // Roche procedurale : grain fin, variations de couleur et litage horizontal.
 // Tous les parametres viennent d'une ressource RockProfile (un profil par gisement).
@@ -16,10 +18,13 @@ uniform float mottle_strength = 0.25;
 uniform float lamination_scale = 900.0;
 uniform float lamination_strength = 0.10;
 uniform float rock_roughness = 0.82;
+// Opacite du voile de poussiere (derniere couche, celle du pinceau).
+uniform float dust_opacity : hint_range(0.0, 1.0) = 0.55;
 
 varying vec3 v_world;
 varying vec3 v_normal_world;
 varying float v_layer; // 1.0 = surface intacte, 0.0 = fond de la gangue
+varying float v_dust;  // 1.0 sur la derniere couche
 
 float hash13(vec3 p) {
 	p = fract(p * 0.1031);
@@ -61,6 +66,7 @@ void vertex() {
 	v_world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	v_normal_world = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	v_layer = COLOR.r;
+	v_dust = COLOR.g;
 }
 
 void fragment() {
@@ -88,7 +94,13 @@ void fragment() {
 	col *= 1.0 + (grain - 0.5) * grain_strength * 2.0;
 	col *= 1.0 - (1.0 - bedding) * lamination_strength;
 
-	ALBEDO = col;
-	ROUGHNESS = clamp(rock_roughness - (grain - 0.5) * 0.12, 0.0, 1.0);
-	SPECULAR = 0.25;
+	// Derniere couche : un voile de poussiere translucide et mat, sous lequel on
+	// devine le fossile comme a travers une surface sablee. Le grain module
+	// legerement l'opacite pour que le voile ne soit pas uniforme.
+	float veil = clamp(dust_opacity + (grain - 0.5) * 0.22, 0.0, 1.0);
+	ALPHA = mix(1.0, veil, v_dust);
+
+	ALBEDO = mix(col, col * 1.12, v_dust);
+	ROUGHNESS = clamp(rock_roughness - (grain - 0.5) * 0.12 + v_dust * 0.12, 0.0, 1.0);
+	SPECULAR = mix(0.25, 0.12, v_dust);
 }
