@@ -12,16 +12,20 @@ class_name ToolCursor
 @export_range(0.0, 1.0, 0.05) var uprightness: float = 0.62
 ## Noms de noeuds a masquer dans les modeles (marques deposees visibles).
 @export var hidden_node_names: PackedStringArray = PackedStringArray(["Logo"])
+## Cote maximal des textures d'outil, en pixels. Ces modeles sont textures pour
+## du gros plan de vitrine (le pinceau pese 92 Mo a lui seul) ; un curseur qui
+## occupe quelques centaines de pixels n'en a pas besoin. 0 desactive la reduction.
+@export var max_texture_size: int = 512
 
 @export_group("Micro-percuteur")
 @export var percuteur_model: String = "res://3D models/PEN.glb"
 @export var percuteur_length_m: float = 0.17
-@export var percuteur_flip: bool = false
+@export var percuteur_flip: bool = true
 
 @export_group("Pinceau")
 @export var pinceau_model: String = "res://3D models/BRUSH.glb"
 @export var pinceau_length_m: float = 0.19
-@export var pinceau_flip: bool = false
+@export var pinceau_flip: bool = true
 
 @export_group("Colle")
 @export var colle_model: String = "res://3D models/GLUE.glb"
@@ -66,6 +70,8 @@ func _load(tool: DigController.Tool, path: String, target_length: float, flip: b
 	_hide_marked_nodes(node)
 	if tint.a > 0.0:
 		_apply_tint(node, tint)
+	elif max_texture_size > 0:
+		_downscale_textures(node, max_texture_size)
 
 	# L'axe du manche est cherche par analyse en composantes principales, et non
 	# d'apres la boite englobante : ces modeles sont parfois ranges de biais
@@ -160,6 +166,49 @@ func _sample_points(root: Node3D, wanted: int) -> PackedVector3Array:
 				points.append(relative * vertices[index])
 				index += stride
 	return points
+
+## Reduit les textures trop grandes, sans toucher aux fichiers d'origine : on
+## remplace les materiaux par des copies pointant vers des versions reduites.
+func _downscale_textures(root: Node3D, limit: int) -> void:
+	var already_reduced: Dictionary = {}
+	for node in _descendants(root):
+		var instance := node as MeshInstance3D
+		if instance == null or instance.mesh == null:
+			continue
+		for surface in instance.mesh.get_surface_count():
+			var source := instance.mesh.surface_get_material(surface) as BaseMaterial3D
+			if source == null:
+				continue
+			var copy := source.duplicate() as BaseMaterial3D
+			copy.albedo_texture = _shrink(copy.albedo_texture, limit, already_reduced)
+			copy.normal_texture = _shrink(copy.normal_texture, limit, already_reduced)
+			copy.roughness_texture = _shrink(copy.roughness_texture, limit, already_reduced)
+			copy.metallic_texture = _shrink(copy.metallic_texture, limit, already_reduced)
+			instance.set_surface_override_material(surface, copy)
+
+func _shrink(texture: Texture2D, limit: int, already_reduced: Dictionary) -> Texture2D:
+	if texture == null:
+		return null
+	if maxi(texture.get_width(), texture.get_height()) <= limit:
+		return texture
+	if already_reduced.has(texture):
+		return already_reduced[texture]
+
+	var image := texture.get_image()
+	if image == null:
+		return texture
+	image = image.duplicate() as Image
+	if image.is_compressed() and image.decompress() != OK:
+		return texture
+
+	var factor := float(limit) / float(maxi(image.get_width(), image.get_height()))
+	image.resize(
+		maxi(1, int(image.get_width() * factor)),
+		maxi(1, int(image.get_height() * factor)),
+		Image.INTERPOLATE_LANCZOS)
+	var reduced := ImageTexture.create_from_image(image)
+	already_reduced[texture] = reduced
+	return reduced
 
 func _apply_tint(root: Node3D, tint: Color) -> void:
 	var material := StandardMaterial3D.new()

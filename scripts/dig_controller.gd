@@ -18,7 +18,7 @@ signal cracked()
 
 ## Rayon d'action des outils, en cellules.
 @export var percuteur_radius: int = 2
-@export var pinceau_radius: int = 2
+@export var pinceau_radius: int = 5
 ## Vitesse a laquelle le risque retombe quand on ralentit (par seconde).
 @export var risk_recovery: float = 0.55
 ## Malus de valeur scientifique par fissure, et plancher.
